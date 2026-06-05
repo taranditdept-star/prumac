@@ -67,15 +67,27 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
     }
 
     map.on("error", (e) => {
-      const err = e.error as { status?: number } | undefined;
+      const err = e.error as { status?: number; message?: string } | undefined;
+      // Surface map errors so a blank map is diagnosable from the console.
+      console.error("[FleetMap] mapbox error:", err?.message ?? e);
       if (err?.status === 401 || err?.status === 403) setTokenError(true);
     });
 
     map.on("load", () => {
+      map.resize();
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     });
 
+    // Mapbox renders blank if its container wasn't fully sized when the map was
+    // created (common inside grid/flex layouts). Force a resize once the layout
+    // settles and whenever the container changes size.
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(containerRef.current);
+    const raf = requestAnimationFrame(() => map.resize());
+
     return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
       map.remove();
