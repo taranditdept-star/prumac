@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- PRUMAC CONNECT emblem (placeholder recreation in brand colours).
+       Replace public/logo.png with the official artwork to override icons. -->
+  <g transform="translate(32 32) rotate(12)">
+    <rect x="-23" y="-8" width="21" height="16" rx="8" fill="#E5231B"/>
+    <rect x="-8" y="-23" width="16" height="21" rx="8" fill="#E5231B"/>
+    <rect x="2" y="-8" width="21" height="16" rx="8" fill="#1C2B6B"/>
+    <rect x="-8" y="2" width="16" height="21" rx="8" fill="#1C2B6B"/>
+  </g>
+</svg>

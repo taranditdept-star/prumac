@@ -1,0 +1,22 @@
+{
+  "name": "PRUMAC Connect",
+  "short_name": "PRUMAC",
+  "description": "PRUMAC Connect — fleet management for Ensign Holdings (Zimbabwe & South Africa).",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "categories": ["business", "productivity", "navigation"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Start trip", "url": "/trip/start" },
+    { "name": "Report fault", "url": "/fault/new" }
+  ]
+}

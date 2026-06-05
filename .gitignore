@@ -33,6 +33,15 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Local one-off dev/ops scripts that contain hardcoded credentials — never commit
+/dev-server.log
+/apply-grants.mjs
+/apply-rls-fix.mjs
+/fix-trigger-and-admin.mjs
+/run-migrations.mjs
+/seed-drivers.mjs
+/setup-admin.mjs
+
 # vercel
 .vercel
 
