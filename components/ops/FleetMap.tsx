@@ -237,7 +237,7 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
 
   return (
     <div className="relative rounded-2xl overflow-hidden border border-ink-800 h-[600px] bg-ink-900">
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="h-full w-full" />
       {positions.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="rounded-2xl bg-ink-950/80 backdrop-blur px-5 py-4 border border-white/10 text-center">
