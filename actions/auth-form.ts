@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { roleDefaultPath } from "@/lib/auth/session";
-import { emailLoginSchema } from "@/lib/validation/auth";
+import { usernameLoginSchema } from "@/lib/validation/auth";
+import { usernameToEmail } from "@/lib/auth/username";
 import type { AppRole } from "@/types/domain";
 
 /**
@@ -15,8 +16,8 @@ import type { AppRole } from "@/types/domain";
  * Errors come back as a `?error=` query string the form reads to display.
  */
 export async function signInWithEmailForm(formData: FormData): Promise<void> {
-  const parsed = emailLoginSchema.safeParse({
-    email: formData.get("email"),
+  const parsed = usernameLoginSchema.safeParse({
+    username: formData.get("username") ?? formData.get("email"),
     password: formData.get("password"),
   });
   if (!parsed.success) {
@@ -24,9 +25,12 @@ export async function signInWithEmailForm(formData: FormData): Promise<void> {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(parsed.data.username),
+    password: parsed.data.password,
+  });
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent("Wrong username or password.")}`);
   }
 
   const {

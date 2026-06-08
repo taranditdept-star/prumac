@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft, AlertCircle, ClipboardCheck, ChevronRight } from "lucide-react";
 import { requireAuth } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { StartTripPicker, type AssignedVehicle } from "@/components/driver/StartTripPicker";
@@ -70,6 +70,20 @@ export default async function DriverStartTripPage() {
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Start trip</h1>
       </header>
+
+      {vehicles.length > 0 && (
+        <Link
+          href="/checklist"
+          className="flex items-center gap-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 active:scale-[0.99] transition-transform"
+        >
+          <ClipboardCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-emerald-900">Daily vehicle checklist required</p>
+            <p className="text-[11px] text-emerald-700">Complete today's checklist first, then start your trip.</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-emerald-600" />
+        </Link>
+      )}
 
       {vehicles.length === 0 ? (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3">

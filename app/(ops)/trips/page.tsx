@@ -83,26 +83,7 @@ export default async function TripsPage({
     return qb;
   };
 
-  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }] = await Promise.all([
-    supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
-    supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: true }).limit(1).maybeSingle<{ started_at: string }>(),
-    supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle<{ started_at: string }>(),
-  ]);
-  const months = monthsBetween(minRow?.started_at ?? null, maxRow?.started_at ?? null);
-
-  const countFor = async (statuses: string[]) => {
-    const { count } = await applyFilters(
-      supabase.schema("app").from("trips").select("id", { count: "exact", head: true }),
-    ).in("status", statuses);
-    return count ?? 0;
-  };
-  const [active, awaiting, completed, cancelled] = await Promise.all([
-    countFor(["in_progress", "paused"]),
-    countFor(["ended"]),
-    countFor(["completed"]),
-    countFor(["cancelled"]),
-  ]);
-
+  // Build the (filtered, status-included) list query.
   let listQ = applyFilters(
     supabase.schema("app").from("trips").select(`
       id, status, route_description, origin_label, destination_label,
@@ -113,10 +94,29 @@ export default async function TripsPage({
     `, { count: "exact" }),
   );
   if (statusFilter) listQ = listQ.eq("status", statusFilter);
-  const { data: trips, count: total, error } = await listQ
+  listQ = listQ
     .order("started_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(LIST_LIMIT);
+
+  // Everything in ONE parallel wave: filter options, status breakdown, list.
+  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }, { data: statusRows }, listRes] =
+    await Promise.all([
+      supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
+      supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: true }).limit(1).maybeSingle<{ started_at: string }>(),
+      supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle<{ started_at: string }>(),
+      applyFilters(supabase.schema("app").from("trips").select("status")).limit(20000),
+      listQ,
+    ]);
+
+  const months = monthsBetween(minRow?.started_at ?? null, maxRow?.started_at ?? null);
+  const statuses = (statusRows ?? []) as { status: string }[];
+  const active = statuses.filter((s) => s.status === "in_progress" || s.status === "paused").length;
+  const awaiting = statuses.filter((s) => s.status === "ended").length;
+  const completed = statuses.filter((s) => s.status === "completed").length;
+  const cancelled = statuses.filter((s) => s.status === "cancelled").length;
+
+  const { data: trips, count: total, error } = listRes as { data: TripListRow[] | null; count: number | null; error: { message: string } | null };
 
   if (error) {
     return (

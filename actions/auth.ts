@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { roleDefaultPath } from "@/lib/auth/session";
 import {
-  emailLoginSchema,
+  usernameLoginSchema,
   phoneOtpRequestSchema,
   phoneOtpVerifySchema,
   resetPasswordSchema,
@@ -13,31 +13,28 @@ import {
 } from "@/lib/validation/auth";
 import type { AppRole } from "@/types/domain";
 import { normalisePhone } from "@/lib/utils/phone";
+import { usernameToEmail } from "@/lib/auth/username";
 
 export type ActionResult =
   | { error: string }
   | { success: true }
   | { redirectTo: string };
 
-/** Sign in with email + password. */
+/** Sign in with username (driver ID, or email for staff) + password. */
 export async function signInWithEmail(formData: FormData): Promise<ActionResult> {
-  const parsed = emailLoginSchema.safeParse({
-    email: formData.get("email"),
+  const parsed = usernameLoginSchema.safeParse({
+    username: formData.get("username") ?? formData.get("email"),
     password: formData.get("password"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const { error, data: signInData } = await supabase.auth.signInWithPassword(parsed.data);
-
-  console.log("[signInWithEmail] signIn result:", {
-    hasError: !!error,
-    errorMsg: error?.message,
-    hasSession: !!signInData?.session,
-    userId: signInData?.user?.id,
+  const { error, data: signInData } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(parsed.data.username),
+    password: parsed.data.password,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: "Wrong username or password." };
   if (!signInData.user) return { error: "Sign-in failed. Please try again." };
 
   const { data: profile, error: profileError } = await supabase

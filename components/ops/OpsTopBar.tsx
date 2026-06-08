@@ -7,7 +7,7 @@ import { signOut } from "@/actions/auth";
 import { GlobalSearch } from "@/components/ops/GlobalSearch";
 import type { ProfileRow } from "@/types/domain";
 
-export function OpsTopBar({ profile }: { profile: ProfileRow }) {
+export function OpsTopBar({ profile, alertCount = 0 }: { profile: ProfileRow; alertCount?: number }) {
   const [isPending, startTransition] = useTransition();
 
   function handleSignOut() {
@@ -39,14 +39,18 @@ export function OpsTopBar({ profile }: { profile: ProfileRow }) {
           <HelpCircle className="h-[18px] w-[18px]" />
         </button>
 
-        <button
-          type="button"
-          aria-label="Notifications"
+        <Link
+          href="/live"
+          aria-label={`Notifications${alertCount ? ` (${alertCount} unresolved)` : ""}`}
           className="relative h-10 w-10 rounded-xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-500 hover:text-ink-900 transition-colors"
         >
           <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
-        </button>
+          {alertCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+              {alertCount > 99 ? "99+" : alertCount}
+            </span>
+          )}
+        </Link>
 
         <div className="h-6 w-px bg-ink-200 mx-1" />
 

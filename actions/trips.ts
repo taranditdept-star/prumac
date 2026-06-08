@@ -68,6 +68,28 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     return { error: "You must accept the vehicle-use terms before starting a trip." };
   }
 
+  // A vehicle checklist is required once per day before driving (drivers only;
+  // office dispatch by managers/admins is exempt). One daily_checklist for this
+  // vehicle completed today covers all of that day's trips.
+  if (profile.role === "driver") {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { data: todaysChecklist } = await supabase
+      .schema("app")
+      .from("inspections")
+      .select("id")
+      .eq("vehicle_id", parsed.data.vehicle_id)
+      .eq("driver_id", parsed.data.driver_id)
+      .eq("type", "daily_checklist")
+      .gte("completed_at", startOfDay.toISOString())
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    if (!todaysChecklist) {
+      return { error: "Complete today's vehicle checklist before starting a trip." };
+    }
+  }
+
   // Last known reading for this vehicle — used to detect a rolled-back or
   // implausibly-jumped start odometer.
   const { data: vehicle } = await supabase
