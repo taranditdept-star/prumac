@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { reportAccident } from "@/actions/accidents";
 import { PhotoInput } from "@/components/primitives/PhotoInput";
+import { uploadPhotosToStorage } from "@/lib/storage/upload-photos";
 import type { CountryCode } from "@/types/domain";
 
 interface VehicleOpt {
@@ -44,15 +45,36 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
   const [severity, setSeverity] = useState<"minor" | "moderate" | "severe" | "fatal">("moderate");
   const [otherParties, setOtherParties] = useState(false);
   const [injuries, setInjuries] = useState(false);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+
+    // Upload scene photos straight to Storage first, so only their paths (not
+    // the image bytes) go through the Server Action.
+    let photoPaths: string[] = [];
+    if (photoFiles.length > 0) {
+      setUploading(true);
+      try {
+        photoPaths = await uploadPhotosToStorage(photoFiles, "accident");
+      } catch {
+        setUploading(false);
+        toast.error("Couldn't upload the photos. Check your connection and try again.");
+        return;
+      }
+      setUploading(false);
+    }
+
+    const fd = new FormData(form);
+    fd.delete("photos"); // never stream image bytes through the action
     fd.set("vehicle_id", vehicle.id);
     if (activeTripId) fd.set("trip_id", activeTripId);
     fd.set("severity", severity);
     fd.set("other_parties_involved", otherParties ? "true" : "false");
     fd.set("injuries", injuries ? "true" : "false");
+    photoPaths.forEach((p) => fd.append("photo_paths", p));
 
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -230,16 +252,16 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
       {/* Photos */}
       <div className="space-y-2">
         <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">Scene photos</Label>
-        <PhotoInput name="photos" max={10} label="Add scene photos" />
+        <PhotoInput name="photos" max={10} label="Add scene photos" onFilesChange={setPhotoFiles} />
       </div>
 
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || uploading}
         className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 transition-all disabled:opacity-50"
       >
         <Send className="h-5 w-5" />
-        {isPending ? "Reporting…" : "Submit accident report"}
+        {uploading ? "Uploading photos…" : isPending ? "Reporting…" : "Submit accident report"}
       </button>
 
       <p className="text-[11px] text-ink-500 flex items-start gap-1.5">

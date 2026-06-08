@@ -73,22 +73,16 @@ export async function reportAccident(formData: FormData): Promise<ActionResult<{
 
   if (error) return { error: error.message };
 
-  // Photos
-  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length > 0) {
+  // Photos are uploaded direct to Storage by the browser; the action only
+  // receives their paths (keeps the Server Action payload tiny). Accept only
+  // keys inside the accident namespace of the photos bucket.
+  const photoPaths = formData
+    .getAll("photo_paths")
+    .filter((p): p is string => typeof p === "string" && p.startsWith("accident/"));
+  if (photoPaths.length > 0) {
     const service = createServiceClient();
-    for (const file of files) {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `accident/${data.id}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await service.storage
-        .from("photos")
-        .upload(path, file, { upsert: false, contentType: file.type });
-      if (upErr) continue;
-      await service
-        .schema("app")
-        .from("accident_photos")
-        .insert({ accident_id: data.id, file_path: path });
-    }
+    const rows = photoPaths.map((file_path) => ({ accident_id: data.id, file_path }));
+    await service.schema("app").from("accident_photos").insert(rows);
   }
 
   // Alert is raised automatically by the accidents_raise_alert trigger

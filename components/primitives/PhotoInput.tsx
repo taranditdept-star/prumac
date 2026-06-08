@@ -7,31 +7,40 @@ interface PhotoInputProps {
   name: string;
   max?: number;
   label?: string;
+  /**
+   * When provided, the parent owns the selected files (typically to upload them
+   * direct to Storage) and the hidden file inputs are NOT rendered — so the
+   * image bytes are never streamed through the form's Server Action.
+   */
+  onFilesChange?: (files: File[]) => void;
 }
 
-export function PhotoInput({ name, max = 6, label = "Add photos" }: PhotoInputProps) {
+export function PhotoInput({ name, max = 6, label = "Add photos", onFilesChange }: PhotoInputProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
 
-  function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(e.target.files ?? []);
-    const next = [...files, ...picked].slice(0, max);
+  function commit(next: File[]) {
     setFiles(next);
     setUrls(next.map((f) => URL.createObjectURL(f)));
+    onFilesChange?.(next);
+  }
+
+  function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    commit([...files, ...picked].slice(0, max));
     e.target.value = "";
   }
 
   function remove(i: number) {
     const next = [...files];
     next.splice(i, 1);
-    setFiles(next);
-    setUrls(next.map((f) => URL.createObjectURL(f)));
+    commit(next);
   }
 
   return (
     <div className="space-y-2">
-      {/* Hidden inputs that will be submitted with the form */}
-      {files.map((file, i) => (
+      {/* When the parent isn't managing files, submit them with the form */}
+      {!onFilesChange && files.map((file, i) => (
         <HiddenFile key={i} name={name} file={file} />
       ))}
 
