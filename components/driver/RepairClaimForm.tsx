@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { OcrButton } from "@/components/ocr/OcrButton";
 import { submitRepairClaim } from "@/actions/repairs";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { compressImage } from "@/lib/image/compress";
 import type { CountryCode } from "@/types/domain";
 
 export interface RepairVehicle {
@@ -40,18 +41,23 @@ export function RepairClaimForm({ vehicles, subsidiaries }: Props) {
   const [vehicleId, setVehicleId] = useState<string>(vehicles[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
 
-  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    setPhotoUrl(file ? URL.createObjectURL(file) : null);
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.files?.[0];
+    if (!raw) { setPhotoUrl(null); setPhotoFile(null); return; }
+    const file = await compressImage(raw);
+    setPhotoFile(file);
+    setPhotoUrl(URL.createObjectURL(file));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("vehicle_id", vehicleId);
+    if (photoFile) fd.set("receipt", photoFile); // send the compressed receipt
     startTransition(async () => {
       try {
         const result = await submitRepairClaim(fd);

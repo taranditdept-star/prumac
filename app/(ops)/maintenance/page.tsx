@@ -3,9 +3,12 @@ import { Plus, Wrench, ArrowUpRight, Calendar, Gauge } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { MaintenanceFilters } from "@/components/ops/MaintenanceFilters";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
+
+const LIST_LIMIT = 300;
 
 interface ServiceRow {
   id: string;
@@ -28,30 +31,77 @@ function money(n: number, c = "USD"): string {
   return `${c} ${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default async function MaintenancePage() {
+function rangeFor(period: string): { start: string; end: string } | null {
+  if (/^\d{4}$/.test(period)) return { start: `${period}-01-01`, end: `${Number(period) + 1}-01-01` };
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    const [y, m] = period.split("-").map(Number);
+    const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    return { start: `${period}-01`, end };
+  }
+  return null;
+}
+
+function monthsBetween(min: string | null, max: string | null): string[] {
+  if (!min || !max) return [];
+  const a = new Date(min), b = new Date(max);
+  const out: string[] = [];
+  let y = a.getFullYear(), m = a.getMonth();
+  while (y < b.getFullYear() || (y === b.getFullYear() && m <= b.getMonth())) {
+    out.push(`${y}-${String(m + 1).padStart(2, "0")}`);
+    if (++m > 11) { m = 0; y++; }
+  }
+  return out;
+}
+
+export default async function MaintenancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; vehicle?: string; type?: string }>;
+}) {
   await requireRole("fleet_manager", "admin");
+  const sp = await searchParams;
   const supabase = await createClient();
 
-  const { data: rows } = await supabase
-    .schema("app")
-    .from("service_records")
-    .select(`
+  const period = sp.period ?? "all";
+  const vehicleId = sp.vehicle && sp.vehicle !== "all" ? sp.vehicle : null;
+  const typeFilter = sp.type && sp.type !== "all" ? sp.type : null;
+  const range = rangeFor(period);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const applyFilters = (qb: any) => {
+    if (range) qb = qb.gte("performed_at", range.start).lt("performed_at", range.end);
+    if (vehicleId) qb = qb.eq("vehicle_id", vehicleId);
+    if (typeFilter) qb = qb.eq("is_routine_service", typeFilter === "routine");
+    return qb;
+  };
+
+  // Filter options + lightweight stats over the whole filtered set
+  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }, { data: statRows }] = await Promise.all([
+    supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
+    supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: true }).limit(1).maybeSingle<{ performed_at: string }>(),
+    supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: false }).limit(1).maybeSingle<{ performed_at: string }>(),
+    applyFilters(supabase.schema("app").from("service_records").select("total_amount, is_routine_service")).limit(10000),
+  ]);
+  const months = monthsBetween(minRow?.performed_at ?? null, maxRow?.performed_at ?? null);
+
+  const allStats = (statRows ?? []) as { total_amount: number; is_routine_service: boolean }[];
+  const stats = {
+    total: allStats.length,
+    spend: allStats.reduce((s, r) => s + Number(r.total_amount), 0),
+    routine: allStats.filter((r) => r.is_routine_service).length,
+    repairs: allStats.filter((r) => !r.is_routine_service).length,
+  };
+
+  const { data: rows } = await applyFilters(
+    supabase.schema("app").from("service_records").select(`
       id, performed_at, odometer_km, is_routine_service, workshop, total_amount, currency, summary,
       vehicles(plate_number, plate_country, make, model),
       subsidiaries:reimburse_from_subsidiary_id(name)
-    `)
-    .order("performed_at", { ascending: false })
-    .limit(200)
-    .returns<ServiceRow[]>();
+    `),
+  ).order("performed_at", { ascending: false }).limit(LIST_LIMIT);
 
-  const list = rows ?? [];
-  const ytd = list.filter((r) => new Date(r.performed_at).getFullYear() === new Date().getFullYear());
-  const stats = {
-    total: list.length,
-    ytdSpend: ytd.reduce((s, r) => s + Number(r.total_amount), 0),
-    routine: list.filter((r) => r.is_routine_service).length,
-    repairs: list.filter((r) => !r.is_routine_service).length,
-  };
+  const list = (rows ?? []) as ServiceRow[];
+  const spendLabel = range || vehicleId || typeFilter ? "Filtered spend" : "Total spend";
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -70,11 +120,21 @@ export default async function MaintenancePage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Tile icon={Wrench} tone="brand" label="Total records" value={stats.total.toString()} />
-        <Tile icon={Calendar} tone="emerald" label="Routine services" value={stats.routine.toString()} />
-        <Tile icon={Gauge} tone="amber" label="Repairs" value={stats.repairs.toString()} />
-        <Tile icon={Wrench} tone="violet" label="YTD spend" value={money(stats.ytdSpend)} />
+        <Tile icon={Wrench} tone="brand" label="Total records" value={stats.total.toLocaleString()} />
+        <Tile icon={Calendar} tone="emerald" label="Routine services" value={stats.routine.toLocaleString()} />
+        <Tile icon={Gauge} tone="amber" label="Repairs" value={stats.repairs.toLocaleString()} />
+        <Tile icon={Wrench} tone="violet" label={spendLabel} value={money(stats.spend)} />
       </div>
+
+      <MaintenanceFilters
+        vehicles={(vehiclesOpt ?? []) as { id: string; plate_number: string; make: string; model: string }[]}
+        months={months}
+      />
+
+      <p className="text-xs text-ink-500">
+        Showing <span className="font-bold text-ink-700">{list.length.toLocaleString()}</span>
+        {stats.total > list.length && <> of <span className="font-bold text-ink-700">{stats.total.toLocaleString()}</span></>} records
+      </p>
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

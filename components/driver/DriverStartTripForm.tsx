@@ -7,6 +7,7 @@ import { Play, Gauge, Camera, Lock, X, ShieldCheck, FileText } from "lucide-reac
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { startTrip } from "@/actions/trips";
+import { compressImage } from "@/lib/image/compress";
 
 interface DriverStartTripFormProps {
   vehicleId: string;
@@ -38,12 +39,16 @@ export function DriverStartTripForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
-  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    setPhotoUrl(file ? URL.createObjectURL(file) : null);
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.files?.[0];
+    if (!raw) { setPhotoUrl(null); setPhotoFile(null); return; }
+    const file = await compressImage(raw);
+    setPhotoFile(file);
+    setPhotoUrl(URL.createObjectURL(file));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -57,6 +62,7 @@ export function DriverStartTripForm({
     fd.set("vehicle_id", vehicleId);
     fd.set("driver_id", driverId);
     fd.set("terms_accepted", accepted ? "true" : "false");
+    if (photoFile) fd.set("start_odometer_photo", photoFile); // send the compressed image
     startTransition(async () => {
       try {
         const result = await startTrip(fd);
