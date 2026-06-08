@@ -181,6 +181,54 @@ export async function updateDriver(formData: FormData): Promise<ActionResult> {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// DELETE driver (admin only) — guarded.
+//
+// Only a driver with NO linked history can be hard-deleted (e.g. one added by
+// mistake). ON DELETE RESTRICT foreign keys (trips, assignments, inspections,
+// faults, accidents) make the row DELETE fail atomically with code 23503 when
+// history exists. On success we also remove the linked auth user, which
+// cascade-deletes the profile, so no orphan login remains.
+// ───────────────────────────────────────────────────────────────────────────
+export async function deleteDriver(driverId: string): Promise<ActionResult> {
+  await requireRole("admin");
+  const service = createServiceClient();
+
+  const { data: driver } = await service
+    .schema("app")
+    .from("drivers")
+    .select("profile_id")
+    .eq("id", driverId)
+    .maybeSingle<{ profile_id: string }>();
+
+  const { error } = await service
+    .schema("app")
+    .from("drivers")
+    .delete()
+    .eq("id", driverId);
+
+  if (error) {
+    if (error.code === "23503") {
+      return {
+        error:
+          "This driver has trip, assignment or incident history. Deactivate them instead of deleting.",
+      };
+    }
+    return { error: error.message };
+  }
+
+  // Remove the auth user (profiles.id REFERENCES auth.users ON DELETE CASCADE).
+  if (driver?.profile_id) {
+    const { error: authErr } = await service.auth.admin.deleteUser(driver.profile_id);
+    if (authErr) {
+      console.error("Driver row deleted but auth user removal failed:", authErr.message);
+    }
+  }
+
+  revalidatePath("/drivers");
+  return { success: true };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // DEACTIVATE driver
 // ───────────────────────────────────────────────────────────────────────────
 export async function deactivateDriver(driverId: string, reason: string): Promise<ActionResult> {

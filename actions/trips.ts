@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
 import {
   tripStartSchema,
@@ -14,6 +15,11 @@ export type ActionResult<T = void> =
   | { error: string }
   | { success: true; data?: T }
   | { redirectTo: string };
+
+// A start odometer above the last known reading by more than this many km is
+// treated as an implausible jump worth flagging (legitimate gaps from other
+// drivers' trips are usually far smaller).
+const ODOMETER_JUMP_THRESHOLD_KM = 1500;
 
 // ───────────────────────────────────────────────────────────────────────────
 // START trip — driver picks vehicle, captures odometer, begins
@@ -33,8 +39,27 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
+  // Odometer photo is mandatory for drivers — it is the tamper-proof evidence
+  // that the entered start reading is genuine. Managers/admins dispatching from
+  // the office aren't at the vehicle, so it's optional for them.
+  const photoEntry = formData.get("start_odometer_photo");
+  const photo = photoEntry instanceof File && photoEntry.size > 0 ? photoEntry : null;
+  if (!photo && profile.role === "driver") {
+    return { error: "A photo of the odometer is required to start a trip." };
+  }
+
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
+
+  // Last known reading for this vehicle — used to detect a rolled-back or
+  // implausibly-jumped start odometer.
+  const { data: vehicle } = await supabase
+    .schema("app")
+    .from("vehicles")
+    .select("current_odometer_km")
+    .eq("id", parsed.data.vehicle_id)
+    .single<{ current_odometer_km: number }>();
+  const lastKnown = vehicle?.current_odometer_km ?? null;
 
   const { data, error } = await supabase
     .schema("app")
@@ -62,6 +87,54 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     return { error: error.message };
   }
 
+  // Upload the odometer photo (when provided) and record its storage key.
+  const service = createServiceClient();
+  let photoPath: string | null = null;
+  if (photo) {
+    const ext = photo.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `trip/${data.id}/start-odometer.${ext}`;
+    const { error: upErr } = await service.storage
+      .from("photos")
+      .upload(path, photo, { upsert: true, contentType: photo.type });
+    if (!upErr) {
+      photoPath = path;
+      await supabase
+        .schema("app")
+        .from("trips")
+        .update({ start_odometer_photo_path: path })
+        .eq("id", data.id);
+    }
+  }
+
+  // Tamper detection — flag a rollback or implausible jump for manager review.
+  if (lastKnown != null) {
+    const entered = parsed.data.start_odometer_km;
+    const delta = entered - lastKnown;
+    const isRollback = delta < 0;
+    const isJump = delta > ODOMETER_JUMP_THRESHOLD_KM;
+    if (isRollback || isJump) {
+      await service.schema("app").from("alerts").insert({
+        kind: "odometer_mismatch",
+        severity: isRollback ? "critical" : "warning",
+        vehicle_id: parsed.data.vehicle_id,
+        driver_id: parsed.data.driver_id,
+        trip_id: data.id,
+        title: isRollback
+          ? "Odometer rolled back at trip start"
+          : "Odometer jumped at trip start",
+        body: `Entered ${entered.toLocaleString()} km vs last known ${lastKnown.toLocaleString()} km (${
+          delta >= 0 ? "+" : ""
+        }${delta.toLocaleString()} km).`,
+        payload: {
+          entered_km: entered,
+          last_known_km: lastKnown,
+          delta_km: delta,
+          photo_path: photoPath,
+        },
+      });
+    }
+  }
+
   // Update vehicle status to on_trip
   await supabase
     .schema("app")
@@ -72,6 +145,7 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
   revalidatePath("/trips");
   revalidatePath("/home");
   revalidatePath("/live");
+  revalidatePath("/live/map");
   return { redirectTo: `/trips/${data.id}` };
 }
 

@@ -14,7 +14,8 @@ type AlertKind =
   | "gps_offline" | "route_deviation" | "speeding"
   | "fault_reported" | "accident_reported" | "service_due"
   | "document_expiring" | "document_expired"
-  | "reconciliation_flagged" | "reconciliation_critical";
+  | "reconciliation_flagged" | "reconciliation_critical"
+  | "odometer_mismatch";
 
 export interface AlertRow {
   id: string;
@@ -43,6 +44,7 @@ const kindIcons: Record<AlertKind, React.ComponentType<{ className?: string }>> 
   document_expired: FileX,
   reconciliation_flagged: Gauge,
   reconciliation_critical: AlertOctagon,
+  odometer_mismatch: Gauge,
 };
 
 const severityStyles: Record<AlertSeverity, { dot: string; bg: string; text: string; border: string; icon: string }> = {

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireRole } from "@/lib/auth/session";
 import { vehicleSchema, vehicleUpdateSchema } from "@/lib/validation/vehicle";
 
@@ -77,6 +78,39 @@ export async function decommissionVehicle(
   if (error) return { error: error.message };
 
   revalidatePath(`/vehicles/${vehicleId}`);
+  revalidatePath("/vehicles");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// DELETE vehicle (admin only) — guarded.
+//
+// Only a vehicle with NO linked history can be hard-deleted (e.g. one added by
+// mistake). The DB's ON DELETE RESTRICT foreign keys (trips, billing_rates,
+// invoices, assignments, inspections, faults, accidents, fuel_logs) make the
+// DELETE fail atomically with code 23503 when any history exists — nothing is
+// partially removed. Anything with history must be decommissioned instead.
+// ---------------------------------------------------------------------------
+export async function deleteVehicle(vehicleId: string): Promise<ActionResult> {
+  await requireRole("admin");
+  const service = createServiceClient();
+
+  const { error } = await service
+    .schema("app")
+    .from("vehicles")
+    .delete()
+    .eq("id", vehicleId);
+
+  if (error) {
+    if (error.code === "23503") {
+      return {
+        error:
+          "This vehicle has linked records (trips, rates, invoices or assignments). Decommission it instead of deleting.",
+      };
+    }
+    return { error: error.message };
+  }
+
   revalidatePath("/vehicles");
   return { success: true };
 }

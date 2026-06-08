@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Play, Gauge } from "lucide-react";
+import { Play, Gauge, Camera, Lock, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { startTrip } from "@/actions/trips";
@@ -35,6 +35,12 @@ export function DriverStartTripForm({
 }: DriverStartTripFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setPhotoUrl(file ? URL.createObjectURL(file) : null);
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -117,11 +123,24 @@ export function DriverStartTripForm({
         </div>
       </div>
 
+      {/* Locked last reading — cannot be edited by the driver */}
+      <div className="rounded-2xl bg-ink-50 border border-ink-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Lock className="h-3.5 w-3.5 text-ink-400" />
+          <span className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
+            Last recorded reading
+          </span>
+        </div>
+        <span className="font-plate font-bold tabular text-ink-700">
+          {currentOdometer.toLocaleString()} km
+        </span>
+      </div>
+
       <div className="rounded-2xl bg-orange-50 border border-orange-200 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Gauge className="h-4 w-4 text-orange-600" />
           <Label className="text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
-            Start odometer (km) *
+            Current odometer (km) *
           </Label>
         </div>
         <Input
@@ -134,8 +153,55 @@ export function DriverStartTripForm({
           className="h-14 text-2xl font-plate font-bold tabular text-center bg-white"
           required
         />
-        <p className="text-xs text-orange-700 mt-2 text-center font-medium">
-          Last reading: {currentOdometer.toLocaleString()} km
+        <p className="text-xs text-orange-700/80 mt-2 text-center font-medium">
+          Enter the reading shown on the dashboard right now.
+        </p>
+      </div>
+
+      {/* Mandatory odometer photo — tamper-proof evidence */}
+      <div className="rounded-2xl bg-white border border-ink-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Camera className="h-4 w-4 text-ink-500" />
+          <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-600">
+            Photo of odometer *
+          </Label>
+        </div>
+        {photoUrl ? (
+          <div className="relative rounded-xl overflow-hidden ring-1 ring-ink-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoUrl} alt="Odometer" className="w-full max-h-56 object-cover" />
+            <label className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-ink-950/70 backdrop-blur text-white flex items-center justify-center cursor-pointer">
+              <X className="h-4 w-4" />
+              <input
+                type="file"
+                name="start_odometer_photo"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhoto}
+                className="sr-only"
+                required
+              />
+            </label>
+          </div>
+        ) : (
+          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-200 hover:border-orange-300 hover:bg-orange-50/40 py-8 cursor-pointer transition-all">
+            <Camera className="h-6 w-6 text-ink-400" />
+            <span className="text-xs uppercase tracking-wider text-ink-400 font-bold">
+              Tap to capture
+            </span>
+            <input
+              type="file"
+              name="start_odometer_photo"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhoto}
+              className="sr-only"
+              required
+            />
+          </label>
+        )}
+        <p className="text-[10px] text-ink-400 mt-2">
+          Required. A manager is alerted if the reading looks tampered with.
         </p>
       </div>
 

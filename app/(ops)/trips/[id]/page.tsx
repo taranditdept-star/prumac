@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
+import { PhotoGallery } from "@/components/primitives/PhotoGallery";
 import { TripActions } from "@/components/ops/TripActions";
 import { ReconciliationBadge } from "@/components/primitives/ReconciliationBadge";
 import type { CountryCode, ReconciliationStatus, TripStatus } from "@/types/domain";
@@ -23,6 +24,8 @@ interface TripDetail {
   destination_label: string | null;
   start_odometer_km: number | null;
   end_odometer_km: number | null;
+  start_odometer_photo_path: string | null;
+  end_odometer_photo_path: string | null;
   fuel_litres: number | null;
   fuel_amount: number | null;
   fuel_currency: string | null;
@@ -258,6 +261,34 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                       ? `${trip.fuel_currency ?? "USD"} ${trip.fuel_amount}`
                       : "—"}
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Odometer evidence photos */}
+          {(trip.start_odometer_photo_path || trip.end_odometer_photo_path) && (
+            <div className="rounded-2xl bg-white border border-ink-200/70 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Gauge className="h-4 w-4 text-sky-600" />
+                <h2 className="text-base font-bold text-ink-900">Odometer evidence</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-400 font-bold mb-2">
+                    Start of trip
+                  </p>
+                  <PhotoGallery
+                    paths={trip.start_odometer_photo_path ? [trip.start_odometer_photo_path] : []}
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-400 font-bold mb-2">
+                    End of trip
+                  </p>
+                  <PhotoGallery
+                    paths={trip.end_odometer_photo_path ? [trip.end_odometer_photo_path] : []}
+                  />
                 </div>
               </div>
             </div>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Truck, User, Building2, MapPin } from "lucide-react";
+import { Truck, User, Building2, MapPin, Camera } from "lucide-react";
 import { startTrip } from "@/actions/trips";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import type { CountryCode } from "@/types/domain";
@@ -251,6 +251,20 @@ export function TripStartForm({ vehicles, drivers, subsidiaries }: TripStartForm
               Last: {selectedVehicle.current_odometer_km.toLocaleString()} km
             </div>
           )}
+        </div>
+        <div className="mt-4 space-y-1.5">
+          <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500 flex items-center gap-1.5">
+            <Camera className="h-3.5 w-3.5" /> Odometer photo (optional)
+          </Label>
+          <input
+            type="file"
+            name="start_odometer_photo"
+            accept="image/*"
+            className="block w-full text-sm text-ink-600 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-700 hover:file:bg-ink-200"
+          />
+          <p className="text-[10px] text-ink-400">
+            Attach a dashboard photo if dispatching against a stated reading.
+          </p>
         </div>
       </div>
 

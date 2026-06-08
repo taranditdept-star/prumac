@@ -1,7 +1,9 @@
-import { DollarSign, Truck, Building2, Calendar } from "lucide-react";
+import { DollarSign } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { NewRateButton } from "@/components/billing/NewRateButton";
+import { RateEditButton } from "@/components/billing/RateEditButton";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +62,28 @@ export default async function RatesPage() {
 
   const list = rates ?? [];
 
+  // Options for the "New rate" drawer
+  const { data: vehicleOpts } = await supabase
+    .schema("app")
+    .from("vehicles")
+    .select("id, plate_number, make, model")
+    .neq("status", "decommissioned")
+    .order("plate_number", { ascending: true })
+    .returns<{ id: string; plate_number: string; make: string; model: string }[]>();
+
+  const { data: subsidiaryOpts } = await supabase
+    .schema("app")
+    .from("subsidiaries")
+    .select("id, name")
+    .order("name", { ascending: true })
+    .returns<{ id: string; name: string }[]>();
+
+  const vehicleChoices = (vehicleOpts ?? []).map((v) => ({
+    id: v.id,
+    label: `${v.plate_number} · ${v.make} ${v.model}`,
+  }));
+  const subsidiaryChoices = subsidiaryOpts ?? [];
+
   const byMode = {
     per_km: list.filter((r) => r.mode === "per_km").length,
     per_litre_100km: list.filter((r) => r.mode === "per_litre_100km").length,
@@ -69,11 +93,14 @@ export default async function RatesPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
-      <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-ink-900 tracking-tight">Billing rates</h1>
-        <p className="text-sm text-ink-500 mt-1">
-          What PRUMAC charges per vehicle, currently effective ({list.length} active)
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-ink-900 tracking-tight">Billing rates</h1>
+          <p className="text-sm text-ink-500 mt-1">
+            What PRUMAC charges per vehicle, currently effective ({list.length} active)
+          </p>
+        </div>
+        <NewRateButton vehicles={vehicleChoices} subsidiaries={subsidiaryChoices} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -93,6 +120,7 @@ export default async function RatesPage() {
               <th className="px-6 py-3 text-right">Rate</th>
               <th className="px-6 py-3 text-left">Effective from</th>
               <th className="px-6 py-3 text-left">Until</th>
+              <th className="px-6 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
@@ -140,6 +168,22 @@ export default async function RatesPage() {
                   {r.effective_until ? fmtDate(r.effective_until) : (
                     <span className="text-emerald-600 font-bold">open-ended</span>
                   )}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <RateEditButton
+                    rate={{
+                      id: r.id,
+                      mode: r.mode,
+                      rate_amount: r.rate_amount,
+                      currency: r.currency,
+                      radius_km: r.radius_km,
+                      effective_from: r.effective_from,
+                      vehicleLabel: r.vehicles
+                        ? `${r.vehicles.plate_number} · ${r.vehicles.make} ${r.vehicles.model}`
+                        : "—",
+                      subsidiaryLabel: r.subsidiaries?.name ?? "All subsidiaries (default)",
+                    }}
+                  />
                 </td>
               </tr>
             ))}

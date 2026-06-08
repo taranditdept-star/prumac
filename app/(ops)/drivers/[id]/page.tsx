@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { AssignmentPanel } from "@/components/ops/AssignmentPanel";
 import { DriverEditButton } from "@/components/ops/DriverEditButton";
+import { DeleteEntityButton } from "@/components/ops/DeleteEntityButton";
 import { DriverInsights } from "@/components/ops/DriverInsights";
 import { DriverScorecard } from "@/components/ops/DriverScorecard";
 import { ExpiryBadge } from "@/components/primitives/ExpiryBadge";
@@ -84,7 +85,7 @@ function initials(name: string): string {
 
 export default async function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireRole("fleet_manager", "admin");
+  const profile = await requireRole("fleet_manager", "admin");
   const supabase = await createClient();
 
   const [{ data: driver }, { data: assignments }, { data: subs }, { data: availableVehicles }, { data: trips }] =
@@ -215,20 +216,30 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
             </div>
           </div>
 
-          <DriverEditButton
-            driver={{
-              ...driver,
-              profile: driver.profiles
-                ? {
-                    full_name: driver.profiles.full_name,
-                    phone: driver.profiles.phone,
-                    subsidiary_id: driver.profiles.subsidiary_id,
-                  }
-                : undefined,
-            }}
-            driverName={name}
-            subsidiaries={subs ?? []}
-          />
+          <div className="flex items-center gap-3">
+            <DriverEditButton
+              driver={{
+                ...driver,
+                profile: driver.profiles
+                  ? {
+                      full_name: driver.profiles.full_name,
+                      phone: driver.profiles.phone,
+                      subsidiary_id: driver.profiles.subsidiary_id,
+                    }
+                  : undefined,
+              }}
+              driverName={name}
+              subsidiaries={subs ?? []}
+            />
+            {profile.role === "admin" && (
+              <DeleteEntityButton
+                entity="driver"
+                id={id}
+                label={name}
+                redirectTo="/drivers"
+              />
+            )}
+          </div>
         </div>
       </div>
 

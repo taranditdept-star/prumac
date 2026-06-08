@@ -7,6 +7,7 @@ import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { VehicleStatusBadge } from "@/components/primitives/VehicleStatusBadge";
 import { DocumentPanel } from "@/components/ops/DocumentPanel";
 import { VehicleEditButton } from "@/components/ops/VehicleEditButton";
+import { DeleteEntityButton } from "@/components/ops/DeleteEntityButton";
 import { VehicleInsights } from "@/components/ops/VehicleInsights";
 import type { VehicleRow, DocumentRow, CountryCode, TripStatus, FuelEfficiency, TyreRow, VehicleDepreciation, AuditEntry } from "@/types/domain";
 import type { Database } from "@/types/database";
@@ -236,7 +237,17 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             </>
           )}
         </div>
-        <VehicleEditButton vehicle={vehicle} subsidiaries={subsidiaries ?? []} />
+        <div className="flex items-center gap-3">
+          <VehicleEditButton vehicle={vehicle} subsidiaries={subsidiaries ?? []} />
+          {profile.role === "admin" && (
+            <DeleteEntityButton
+              entity="vehicle"
+              id={vehicle.id}
+              label={`${vehicle.plate_number} · ${vehicle.make} ${vehicle.model}`}
+              redirectTo="/vehicles"
+            />
+          )}
+        </div>
       </div>
 
       {/* Key facts mini cards */}
