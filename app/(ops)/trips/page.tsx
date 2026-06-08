@@ -9,7 +9,7 @@ import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-const LIST_LIMIT = 300;
+const LIST_LIMIT = 100;
 
 interface TripListRow {
   id: string;
@@ -83,7 +83,9 @@ export default async function TripsPage({
     return qb;
   };
 
-  // Build the (filtered, status-included) list query.
+  // Build the (filtered, status-included) list query. No count:exact — the
+  // total is derived from the lightweight status fetch below (avoids a full
+  // COUNT on every load).
   let listQ = applyFilters(
     supabase.schema("app").from("trips").select(`
       id, status, route_description, origin_label, destination_label,
@@ -91,7 +93,7 @@ export default async function TripsPage({
       vehicles(plate_number, plate_country, make, model),
       drivers(id, profiles(full_name)),
       subsidiaries(name)
-    `, { count: "exact" }),
+    `),
   );
   if (statusFilter) listQ = listQ.eq("status", statusFilter);
   listQ = listQ
@@ -116,7 +118,9 @@ export default async function TripsPage({
   const completed = statuses.filter((s) => s.status === "completed").length;
   const cancelled = statuses.filter((s) => s.status === "cancelled").length;
 
-  const { data: trips, count: total, error } = listRes as { data: TripListRow[] | null; count: number | null; error: { message: string } | null };
+  const { data: trips, error } = listRes as { data: TripListRow[] | null; error: { message: string } | null };
+  // Total matching the current filters (incl. status) — from the status fetch.
+  const total = statusFilter ? statuses.filter((s) => s.status === statusFilter).length : statuses.length;
 
   if (error) {
     return (
@@ -129,7 +133,7 @@ export default async function TripsPage({
   }
 
   const list = (trips ?? []) as TripListRow[];
-  const totalCount = total ?? list.length;
+  const totalCount = total;
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">

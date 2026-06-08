@@ -8,7 +8,7 @@ import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-const LIST_LIMIT = 300;
+const LIST_LIMIT = 100;
 
 interface ServiceRow {
   id: string;
@@ -75,13 +75,21 @@ export default async function MaintenancePage({
     return qb;
   };
 
-  // Filter options + lightweight stats over the whole filtered set
-  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }, { data: statRows }] = await Promise.all([
-    supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
-    supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: true }).limit(1).maybeSingle<{ performed_at: string }>(),
-    supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: false }).limit(1).maybeSingle<{ performed_at: string }>(),
-    applyFilters(supabase.schema("app").from("service_records").select("total_amount, is_routine_service")).limit(10000),
-  ]);
+  // Everything in ONE parallel wave: filter options, stats, and the list.
+  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }, { data: statRows }, { data: rows }] =
+    await Promise.all([
+      supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
+      supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: true }).limit(1).maybeSingle<{ performed_at: string }>(),
+      supabase.schema("app").from("service_records").select("performed_at").order("performed_at", { ascending: false }).limit(1).maybeSingle<{ performed_at: string }>(),
+      applyFilters(supabase.schema("app").from("service_records").select("total_amount, is_routine_service")).limit(10000),
+      applyFilters(
+        supabase.schema("app").from("service_records").select(`
+          id, performed_at, odometer_km, is_routine_service, workshop, total_amount, currency, summary,
+          vehicles(plate_number, plate_country, make, model),
+          subsidiaries:reimburse_from_subsidiary_id(name)
+        `),
+      ).order("performed_at", { ascending: false }).limit(LIST_LIMIT),
+    ]);
   const months = monthsBetween(minRow?.performed_at ?? null, maxRow?.performed_at ?? null);
 
   const allStats = (statRows ?? []) as { total_amount: number; is_routine_service: boolean }[];
@@ -91,14 +99,6 @@ export default async function MaintenancePage({
     routine: allStats.filter((r) => r.is_routine_service).length,
     repairs: allStats.filter((r) => !r.is_routine_service).length,
   };
-
-  const { data: rows } = await applyFilters(
-    supabase.schema("app").from("service_records").select(`
-      id, performed_at, odometer_km, is_routine_service, workshop, total_amount, currency, summary,
-      vehicles(plate_number, plate_country, make, model),
-      subsidiaries:reimburse_from_subsidiary_id(name)
-    `),
-  ).order("performed_at", { ascending: false }).limit(LIST_LIMIT);
 
   const list = (rows ?? []) as ServiceRow[];
   const spendLabel = range || vehicleId || typeFilter ? "Filtered spend" : "Total spend";

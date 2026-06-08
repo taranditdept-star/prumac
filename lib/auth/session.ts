@@ -1,32 +1,47 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { AppRole, ProfileRow } from "@/types/domain";
 
+const PROFILE_COLS =
+  "id, full_name, email, phone, role, subsidiary_id, avatar_url, is_active, deactivated_at, last_seen_at, created_at, updated_at";
+
 /**
- * Load the authed user's profile ONCE per server request. React `cache()`
- * dedupes calls within a single render, so the layout + page + nested helpers
- * share one `getUser()` + one profile fetch instead of each doing their own
- * round-trips to Supabase (a major source of slow page loads).
+ * Fetch a profile by id, cached across requests for 60s. The profile (name,
+ * role) barely changes, so this avoids a ~200ms Supabase round-trip on EVERY
+ * page navigation. Uses the service client so it can run inside unstable_cache.
+ */
+const cachedProfileById = unstable_cache(
+  async (userId: string): Promise<ProfileRow | null> => {
+    const sb = createServiceClient();
+    const { data } = await sb
+      .schema("app")
+      .from("profiles")
+      .select(PROFILE_COLS)
+      .eq("id", userId)
+      .single<ProfileRow>();
+    return data ?? null;
+  },
+  ["auth-profile"],
+  { revalidate: 60 },
+);
+
+/**
+ * Load the authed user's profile. `getSession()` reads the cookie locally (no
+ * network — the proxy already validated it) and the profile is cached for 60s,
+ * so most navigations make ZERO auth round-trips. React `cache()` dedupes
+ * within a single render (layout + page share one call).
  */
 const loadProfile = cache(async (): Promise<ProfileRow | null> => {
   const supabase = await createClient();
-  // getSession() reads the cookie locally (the proxy already validated it),
-  // avoiding a getUser() network round-trip on every page render.
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const user = session?.user;
   if (!user) return null;
-
-  const { data: profile } = await supabase
-    .schema("app")
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single<ProfileRow>();
-
-  return profile ?? null;
+  return cachedProfileById(user.id);
 });
 
 /** Returns the authenticated user's profile, or redirects to /login. */

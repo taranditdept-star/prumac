@@ -1,13 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Maximize2, Radio, Users, Gauge, ArrowUpRight, MapPin, Activity,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { FleetMap, type FleetPosition } from "./FleetMap";
+import type { FleetPosition } from "./FleetMap";
 import { AlertsPanel, type AlertRow } from "./AlertsPanel";
+
+// Mapbox GL (~200KB) is the heaviest dependency — load it only on this page,
+// after paint, so the rest of the app's bundle stays small.
+const FleetMap = dynamic(() => import("./FleetMap").then((m) => ({ default: m.FleetMap })), {
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse rounded-2xl bg-ink-100" />,
+});
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
 
