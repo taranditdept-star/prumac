@@ -7,7 +7,7 @@ import { Play, Gauge, Camera, Lock, X, ShieldCheck, FileText } from "lucide-reac
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { startTrip } from "@/actions/trips";
-import { compressImage } from "@/lib/image/compress";
+import { SinglePhotoInput } from "@/components/primitives/SinglePhotoInput";
 
 interface DriverStartTripFormProps {
   vehicleId: string;
@@ -38,21 +38,16 @@ export function DriverStartTripForm({
 }: DriverStartTripFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
-  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.files?.[0];
-    if (!raw) { setPhotoUrl(null); setPhotoFile(null); return; }
-    const file = await compressImage(raw);
-    setPhotoFile(file);
-    setPhotoUrl(URL.createObjectURL(file));
-  }
-
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!photoFile) {
+      toast.error("Take a photo of the odometer to start the trip.");
+      return;
+    }
     if (agreement && !accepted) {
       toast.error("Please accept the vehicle-use terms to continue.");
       setShowTerms(true);
@@ -62,12 +57,13 @@ export function DriverStartTripForm({
     fd.set("vehicle_id", vehicleId);
     fd.set("driver_id", driverId);
     fd.set("terms_accepted", accepted ? "true" : "false");
-    if (photoFile) fd.set("start_odometer_photo", photoFile); // send the compressed image
+    fd.set("start_odometer_photo", photoFile); // compressed image
     startTransition(async () => {
       try {
         const result = await startTrip(fd);
         if (result && "error" in result) toast.error(result.error);
         else if (result && "redirectTo" in result) {
+          sessionStorage.removeItem("odometer-photo");
           router.push(result.redirectTo);
           router.refresh();
         }
@@ -175,48 +171,15 @@ export function DriverStartTripForm({
       </div>
 
       {/* Mandatory odometer photo — tamper-proof evidence */}
-      <div className="rounded-2xl bg-white border border-ink-200 p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="rounded-2xl bg-white border border-ink-200 p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <Camera className="h-4 w-4 text-ink-500" />
           <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-600">
             Photo of odometer *
           </Label>
         </div>
-        {photoUrl ? (
-          <div className="relative rounded-xl overflow-hidden ring-1 ring-ink-200">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoUrl} alt="Odometer" className="w-full max-h-56 object-cover" />
-            <label className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-ink-950/70 backdrop-blur text-white flex items-center justify-center cursor-pointer">
-              <X className="h-4 w-4" />
-              <input
-                type="file"
-                name="start_odometer_photo"
-                accept="image/*"
-                capture="environment"
-                onChange={handlePhoto}
-                className="sr-only"
-                required
-              />
-            </label>
-          </div>
-        ) : (
-          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-200 hover:border-orange-300 hover:bg-orange-50/40 py-8 cursor-pointer transition-all">
-            <Camera className="h-6 w-6 text-ink-400" />
-            <span className="text-xs uppercase tracking-wider text-ink-400 font-bold">
-              Tap to capture
-            </span>
-            <input
-              type="file"
-              name="start_odometer_photo"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhoto}
-              className="sr-only"
-              required
-            />
-          </label>
-        )}
-        <p className="text-[10px] text-ink-400 mt-2">
+        <SinglePhotoInput onFileChange={setPhotoFile} label="odometer" persistKey="odometer-photo" cameraOnly />
+        <p className="text-[10px] text-ink-400">
           Required. A manager is alerted if the reading looks tampered with.
         </p>
       </div>

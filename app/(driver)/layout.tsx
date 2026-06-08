@@ -73,7 +73,11 @@ export default async function DriverLayout({ children }: { children: React.React
         gradient={gradientFor(profile.full_name)}
         greeting={greetingFor()}
       />
-      <main className="flex-1 overflow-y-auto pb-32">{children}</main>
+      {/* Bottom padding clears the fixed nav (h-16) + safe area so content and
+          submit buttons are never hidden behind the bottom navigation. */}
+      <main className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        {children}
+      </main>
       <DriverBottomTabs activeTripId={activeTripId} />
     </div>
   );

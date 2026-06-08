@@ -76,6 +76,7 @@ export function FaultReportForm({ vehicle, activeTripId }: FaultReportFormProps)
         const result = await reportFault(fd);
         if (result && "error" in result) toast.error(result.error);
         else if (result && "redirectTo" in result) {
+          sessionStorage.removeItem("fault-photos");
           toast.success("Fault reported");
           router.push(result.redirectTo);
           router.refresh();
@@ -175,7 +176,7 @@ export function FaultReportForm({ vehicle, activeTripId }: FaultReportFormProps)
         <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
           Photos
         </Label>
-        <PhotoInput name="photos" max={6} label="Add fault photos" onFilesChange={setPhotoFiles} />
+        <PhotoInput name="photos" max={6} label="fault" onFilesChange={setPhotoFiles} persistKey="fault-photos" />
       </div>
 
       <button

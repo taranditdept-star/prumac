@@ -7,6 +7,26 @@
  * body-size limit (and Vercel's hard request cap). Falls back to the original
  * file if the browser can't decode it.
  */
+/** File → data URL (base64). Used for previews that survive a tab reload. */
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+/** Reconstruct a File from a persisted data URL. */
+export function dataUrlToFile(dataUrl: string, name: string): File {
+  const [head, b64] = dataUrl.split(",");
+  const mime = (head.match(/data:(.*?);/) || [])[1] || "image/jpeg";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new File([arr], name, { type: mime });
+}
+
 export async function compressImage(file: File, maxDim = 1600, quality = 0.72): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
   try {
