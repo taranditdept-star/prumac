@@ -1,11 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
-## Getting Started
-## Getting Started
-## Getting Started
-## Getting Started## Getting Started
-## Getting Started
+## adding new features because readme md file is refusing
 First, run the development server:
 
 ```bash
