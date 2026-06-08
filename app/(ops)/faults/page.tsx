@@ -54,12 +54,16 @@ export default async function FaultsPage() {
   }
 
   const list = faults ?? [];
-  const open = list.filter((f) => f.status !== "resolved" && f.status !== "wont_fix");
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("faults").select("severity, status").limit(20000);
+  const all = (statRows ?? []) as { severity: string; status: string }[];
+  const open = all.filter((f) => f.status !== "resolved" && f.status !== "wont_fix");
   const stats = {
     open: open.length,
     critical: open.filter((f) => f.severity === "critical").length,
     inRepair: open.filter((f) => f.status === "in_repair").length,
-    resolved: list.filter((f) => f.status === "resolved").length,
+    resolved: all.filter((f) => f.status === "resolved").length,
   };
 
   return (
@@ -75,6 +79,10 @@ export default async function FaultsPage() {
         <StatTile icon={Wrench} tone="amber" label="In repair" value={stats.inRepair} />
         <StatTile icon={CheckCircle2} tone="emerald" label="Resolved" value={stats.resolved} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

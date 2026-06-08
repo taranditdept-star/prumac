@@ -60,11 +60,15 @@ export default async function InvoicesPage() {
   }
 
   const list = invoices ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("invoices").select("status, balance_outstanding").limit(20000);
+  const all = (statRows ?? []) as { status: string; balance_outstanding: number }[];
   const stats = {
-    total: list.length,
-    outstanding: list.reduce((s, i) => s + Number(i.balance_outstanding), 0),
-    overdue: list.filter((i) => i.status === "overdue").length,
-    draftCount: list.filter((i) => i.status === "draft").length,
+    total: all.length,
+    outstanding: all.reduce((s, i) => s + Number(i.balance_outstanding), 0),
+    overdue: all.filter((i) => i.status === "overdue").length,
+    draftCount: all.filter((i) => i.status === "draft").length,
   };
 
   const canGenerate = profile.role === "fleet_manager" || profile.role === "admin";
@@ -98,6 +102,10 @@ export default async function InvoicesPage() {
         <Tile icon={Clock} tone="amber" label="Drafts" value={stats.draftCount.toString()} />
         <Tile icon={AlertOctagon} tone="rose" label="Overdue" value={stats.overdue.toString()} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

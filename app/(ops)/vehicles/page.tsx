@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Truck, Filter, Search, Plus, ArrowUpRight } from "lucide-react";
+import { Truck, Plus, ArrowUpRight } from "lucide-react";
+import { ListSearchInput } from "@/components/ops/ListSearchInput";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
@@ -14,8 +15,14 @@ const classIcon: Record<string, string> = {
   suv: "🚙", sedan: "🚗", farm_vehicle: "🚜", specialist: "🏗",
 };
 
-export default async function VehiclesPage() {
+export default async function VehiclesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireRole("fleet_manager", "admin");
+  const { q: qRaw } = await searchParams;
+  const q = (qRaw ?? "").trim().toLowerCase();
   const supabase = await createClient();
 
   const { data: vehicles, error } = await supabase
@@ -59,6 +66,15 @@ export default async function VehiclesPage() {
     onTrip: ranked.filter((v) => v.status === "on_trip").length,
     maintenance: ranked.filter((v) => v.status === "maintenance" || v.status === "workshop").length,
   };
+
+  const shown = q
+    ? ranked.filter(
+        (v) =>
+          (v.plate_number ?? "").toLowerCase().includes(q) ||
+          (v.make ?? "").toLowerCase().includes(q) ||
+          (v.model ?? "").toLowerCase().includes(q),
+      )
+    : ranked;
 
   if (error) {
     return (
@@ -115,39 +131,30 @@ export default async function VehiclesPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-64 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-          <input
-            type="text"
-            placeholder="Search by plate, make, model…"
-            className="h-10 w-full rounded-xl border border-ink-200 bg-white pl-10 pr-4 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/40 transition-all"
-          />
-        </div>
-        <button
-          type="button"
-          className="h-10 px-4 rounded-xl border border-ink-200 bg-white text-sm font-medium text-ink-600 hover:bg-ink-50 inline-flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Filter
-        </button>
+        <ListSearchInput basePath="/vehicles" placeholder="Search by plate, make, model…" />
+        {q && <span className="text-xs text-ink-500">{shown.length} of {ranked.length} vehicles</span>}
       </div>
 
       {/* Card-row table */}
       <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        {ranked.length === 0 ? (
+        {shown.length === 0 ? (
           <div className="py-16 text-center">
             <div className="inline-flex h-14 w-14 rounded-2xl bg-ink-100 items-center justify-center mb-3">
               <Truck className="h-6 w-6 text-ink-400" />
             </div>
-            <p className="text-sm font-semibold text-ink-900">No vehicles yet</p>
-            <p className="text-xs text-ink-500 mt-1 mb-4">Add your first vehicle.</p>
-            <Link
-              href="/vehicles/new"
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold"
-            >
-              <Plus className="h-4 w-4" />
-              Add vehicle
-            </Link>
+            <p className="text-sm font-semibold text-ink-900">{q ? "No vehicles match your search" : "No vehicles yet"}</p>
+            {!q && (
+              <>
+                <p className="text-xs text-ink-500 mt-1 mb-4">Add your first vehicle.</p>
+                <Link
+                  href="/vehicles/new"
+                  className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add vehicle
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -163,7 +170,7 @@ export default async function VehiclesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
-              {ranked.map((v) => {
+              {shown.map((v) => {
                 const vehicleDocs = docsByVehicle.get(v.id) ?? [];
                 const expiredDocs = vehicleDocs.filter(
                   (d) => getExpiryUrgency(d.expires_at) === "expired",

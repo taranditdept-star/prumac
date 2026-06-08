@@ -45,28 +45,41 @@ export default async function DriverHistoryPage() {
     .maybeSingle<{ id: string }>();
 
   let trips: HistoryTrip[] = [];
+  // Lightweight set over ALL the driver's trips so the stat tiles are correct
+  // even when there are more than the displayed page.
+  let statTrips: { status: string; start_odometer_km: number | null; end_odometer_km: number | null; started_at: string | null }[] = [];
   if (driver) {
-    const { data } = await supabase
-      .schema("app")
-      .from("trips")
-      .select(
-        "id, status, route_description, origin_label, destination_label, start_odometer_km, end_odometer_km, started_at, completed_at, vehicles(plate_number, plate_country, make, model)",
-      )
-      .eq("driver_id", driver.id)
-      .neq("status", "planned")
-      .order("started_at", { ascending: false })
-      .limit(100)
-      .returns<HistoryTrip[]>();
+    const [{ data }, { data: stat }] = await Promise.all([
+      supabase
+        .schema("app")
+        .from("trips")
+        .select(
+          "id, status, route_description, origin_label, destination_label, start_odometer_km, end_odometer_km, started_at, completed_at, vehicles(plate_number, plate_country, make, model)",
+        )
+        .eq("driver_id", driver.id)
+        .neq("status", "planned")
+        .order("started_at", { ascending: false })
+        .limit(500)
+        .returns<HistoryTrip[]>(),
+      supabase
+        .schema("app")
+        .from("trips")
+        .select("status, start_odometer_km, end_odometer_km, started_at")
+        .eq("driver_id", driver.id)
+        .neq("status", "planned")
+        .limit(20000),
+    ]);
     trips = data ?? [];
+    statTrips = (stat ?? []) as typeof statTrips;
   }
 
-  const completed = trips.filter((t) => t.status === "completed");
+  const completed = statTrips.filter((t) => t.status === "completed");
   const totalKm = completed.reduce(
     (s, t) => s + Math.max(0, (t.end_odometer_km ?? 0) - (t.start_odometer_km ?? 0)),
     0,
   );
   const now = new Date();
-  const thisMonth = trips.filter((t) => {
+  const thisMonth = statTrips.filter((t) => {
     if (!t.started_at) return false;
     const d = new Date(t.started_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();

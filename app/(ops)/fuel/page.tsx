@@ -44,17 +44,21 @@ export default async function FuelPage() {
     .returns<FuelRow[]>();
 
   const list = rows ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("fuel_logs").select("filled_at, litres, price_per_litre, total_cost").limit(20000);
+  const all = (statRows ?? []) as { filled_at: string; litres: number; price_per_litre: number | null; total_cost: number }[];
   const month = new Date();
   month.setDate(1);
-  const mtd = list.filter((r) => new Date(r.filled_at) >= month);
+  const mtd = all.filter((r) => new Date(r.filled_at) >= month);
   const stats = {
-    fills: list.length,
-    litres: list.reduce((s, r) => s + Number(r.litres), 0),
+    fills: all.length,
+    litres: all.reduce((s, r) => s + Number(r.litres), 0),
     spendMtd: mtd.reduce((s, r) => s + Number(r.total_cost), 0),
     avgPrice:
-      list.length > 0
-        ? list.reduce((s, r) => s + Number(r.price_per_litre ?? 0), 0) /
-          Math.max(1, list.filter((r) => r.price_per_litre != null).length)
+      all.length > 0
+        ? all.reduce((s, r) => s + Number(r.price_per_litre ?? 0), 0) /
+          Math.max(1, all.filter((r) => r.price_per_litre != null).length)
         : 0,
   };
 
@@ -80,6 +84,10 @@ export default async function FuelPage() {
         <Tile icon={DollarSign} tone="violet" label="Spend (MTD)" value={money(stats.spendMtd)} />
         <Tile icon={Gauge} tone="emerald" label="Avg price / L" value={stats.avgPrice ? `$${stats.avgPrice.toFixed(2)}` : "—"} />
       </div>
+
+      {stats.fills > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {stats.fills.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

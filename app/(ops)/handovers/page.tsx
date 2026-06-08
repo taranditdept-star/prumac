@@ -53,10 +53,14 @@ export default async function HandoversPage() {
   }
 
   const list = data ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("vehicle_handovers").select("status").limit(20000);
+  const all = (statRows ?? []) as { status: string }[];
   const stats = {
-    pending: list.filter((r) => r.status === "pending").length,
-    accepted: list.filter((r) => r.status === "accepted").length,
-    rejected: list.filter((r) => r.status === "rejected" || r.status === "cancelled").length,
+    pending: all.filter((r) => r.status === "pending").length,
+    accepted: all.filter((r) => r.status === "accepted").length,
+    rejected: all.filter((r) => r.status === "rejected" || r.status === "cancelled").length,
   };
 
   return (
@@ -73,6 +77,10 @@ export default async function HandoversPage() {
         <Tile icon={CheckCircle2} tone="emerald" label="Accepted" value={stats.accepted} />
         <Tile icon={XCircle} tone="rose" label="Rejected / cancelled" value={stats.rejected} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

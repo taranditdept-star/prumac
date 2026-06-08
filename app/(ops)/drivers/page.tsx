@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Users, Search, Plus, ArrowUpRight, IdCard, Filter } from "lucide-react";
+import { Users, Plus, ArrowUpRight, IdCard } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { ExpiryBadge } from "@/components/primitives/ExpiryBadge";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { ListSearchInput } from "@/components/ops/ListSearchInput";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
 import type { CountryCode } from "@/types/domain";
 
@@ -61,8 +62,14 @@ function initials(name: string | null): string {
     .toUpperCase();
 }
 
-export default async function DriversPage() {
+export default async function DriversPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireRole("fleet_manager", "admin");
+  const { q: qRaw } = await searchParams;
+  const q = (qRaw ?? "").trim().toLowerCase();
   const supabase = await createClient();
 
   const { data: drivers, error } = await supabase
@@ -105,6 +112,15 @@ export default async function DriversPage() {
     const rankB = b.licence_expires_at ? order[getExpiryUrgency(b.licence_expires_at)] : 3;
     return rankA - rankB;
   });
+
+  const shown = q
+    ? sorted.filter(
+        (d) =>
+          (d.profiles?.full_name ?? "").toLowerCase().includes(q) ||
+          (d.licence_number ?? "").toLowerCase().includes(q) ||
+          (d.profiles?.phone ?? "").toLowerCase().includes(q),
+      )
+    : sorted;
 
   const stats = {
     total: list.length,
@@ -164,42 +180,35 @@ export default async function DriversPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-64 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-          <input
-            type="text"
-            placeholder="Search by name, licence, phone…"
-            className="h-10 w-full rounded-xl border border-ink-200 bg-white pl-10 pr-4 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/40 transition-all"
-          />
-        </div>
-        <button
-          type="button"
-          className="h-10 px-4 rounded-xl border border-ink-200 bg-white text-sm font-medium text-ink-600 hover:bg-ink-50 inline-flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Filter
-        </button>
+        <ListSearchInput basePath="/drivers" placeholder="Search by name, licence, phone…" />
+        {q && (
+          <span className="text-xs text-ink-500">{shown.length} of {sorted.length} drivers</span>
+        )}
       </div>
 
       {/* Drivers grid */}
-      {sorted.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">
           <div className="inline-flex h-14 w-14 rounded-2xl bg-ink-100 items-center justify-center mb-3">
             <Users className="h-6 w-6 text-ink-400" />
           </div>
-          <p className="text-sm font-semibold text-ink-900">No drivers yet</p>
-          <p className="text-xs text-ink-500 mt-1 mb-4">Add your first driver to get started.</p>
-          <Link
-            href="/drivers/new"
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold"
-          >
-            <Plus className="h-4 w-4" />
-            Add driver
-          </Link>
+          <p className="text-sm font-semibold text-ink-900">{q ? "No drivers match your search" : "No drivers yet"}</p>
+          {!q && (
+            <>
+              <p className="text-xs text-ink-500 mt-1 mb-4">Add your first driver to get started.</p>
+              <Link
+                href="/drivers/new"
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" />
+                Add driver
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sorted.map((d) => {
+          {shown.map((d) => {
             const name = d.profiles?.full_name ?? "Unknown driver";
             const phone = d.profiles?.phone ?? null;
             const currentAssignment = d.vehicle_assignments?.find((a) => a.vehicles) ?? null;

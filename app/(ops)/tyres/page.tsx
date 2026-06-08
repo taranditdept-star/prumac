@@ -35,9 +35,13 @@ export default async function TyresPage() {
     .returns<TyreWithVehicle[]>();
 
   const list = tyres ?? [];
-  const inService = list.filter((t) => t.status === "in_service");
-  const inStore = list.filter((t) => t.status === "in_store" || t.status === "spare");
-  const lowTread = list.filter(
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("tyres").select("status, tread_depth_mm").limit(20000);
+  const all = (statRows ?? []) as { status: string; tread_depth_mm: number | null }[];
+  const inService = all.filter((t) => t.status === "in_service");
+  const inStore = all.filter((t) => t.status === "in_store" || t.status === "spare");
+  const lowTread = all.filter(
     (t) => t.status !== "scrapped" && t.tread_depth_mm != null && Number(t.tread_depth_mm) <= LOW_TREAD_MM,
   );
 
@@ -58,11 +62,15 @@ export default async function TyresPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Tile icon={CircleDot} tone="brand" label="Total tyres" value={list.length.toString()} />
+        <Tile icon={CircleDot} tone="brand" label="Total tyres" value={all.length.toString()} />
         <Tile icon={Disc3} tone="emerald" label="In service" value={inService.length.toString()} />
         <Tile icon={Warehouse} tone="sky" label="In store / spare" value={inStore.length.toString()} />
         <Tile icon={AlertTriangle} tone="rose" label={`Low tread (≤${LOW_TREAD_MM}mm)`} value={lowTread.length.toString()} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

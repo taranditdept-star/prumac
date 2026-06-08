@@ -62,11 +62,15 @@ export default async function ReconciliationPage() {
   }
 
   const list = rows ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("reconciliations").select("status").eq("is_current", true).limit(20000);
+  const all = (statRows ?? []) as { status: "accepted" | "warning" | "flagged" | "critical" }[];
   const stats = {
-    accepted: list.filter((r) => r.status === "accepted").length,
-    warning: list.filter((r) => r.status === "warning").length,
-    flagged: list.filter((r) => r.status === "flagged").length,
-    critical: list.filter((r) => r.status === "critical").length,
+    accepted: all.filter((r) => r.status === "accepted").length,
+    warning: all.filter((r) => r.status === "warning").length,
+    flagged: all.filter((r) => r.status === "flagged").length,
+    critical: all.filter((r) => r.status === "critical").length,
   };
 
   const order = { critical: 0, flagged: 1, warning: 2, accepted: 3 } as const;
@@ -87,6 +91,10 @@ export default async function ReconciliationPage() {
         <StatTile icon={ShieldAlert} tone="rose" label="Flagged" value={stats.flagged} />
         <StatTile icon={AlertOctagon} tone="crimson" label="Critical" value={stats.critical} />
       </div>
+
+      {all.length > sorted.length && (
+        <p className="text-xs text-ink-500">Showing the latest {sorted.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {sorted.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

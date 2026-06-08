@@ -53,11 +53,15 @@ export default async function RepairsPage() {
   }
 
   const list = data ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("repair_claims").select("status, amount").limit(20000);
+  const all = (statRows ?? []) as { status: string; amount: number }[];
   const stats = {
-    submitted: list.filter((c) => c.status === "submitted").length,
-    approved: list.filter((c) => c.status === "approved").length,
-    rejected: list.filter((c) => c.status === "rejected").length,
-    pendingValue: list
+    submitted: all.filter((c) => c.status === "submitted").length,
+    approved: all.filter((c) => c.status === "approved").length,
+    rejected: all.filter((c) => c.status === "rejected").length,
+    pendingValue: all
       .filter((c) => c.status === "submitted")
       .reduce((s, c) => s + Number(c.amount), 0),
   };
@@ -78,6 +82,10 @@ export default async function RepairsPage() {
         <Tile icon={XCircle} tone="rose" label="Rejected" value={String(stats.rejected)} />
         <Tile icon={DollarSign} tone="brand" label="Pending value" value={stats.pendingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

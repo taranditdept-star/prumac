@@ -52,12 +52,16 @@ export default async function AccidentsPage() {
   }
 
   const list = accidents ?? [];
-  const open = list.filter((a) => a.status !== "closed");
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("accidents").select("severity, status").limit(20000);
+  const all = (statRows ?? []) as { severity: string; status: string }[];
+  const open = all.filter((a) => a.status !== "closed");
   const stats = {
     open: open.length,
     investigating: open.filter((a) => a.status === "investigating").length,
-    severePlus: list.filter((a) => a.severity === "severe" || a.severity === "fatal").length,
-    closed: list.filter((a) => a.status === "closed").length,
+    severePlus: all.filter((a) => a.severity === "severe" || a.severity === "fatal").length,
+    closed: all.filter((a) => a.status === "closed").length,
   };
 
   return (
@@ -73,6 +77,10 @@ export default async function AccidentsPage() {
         <StatTile icon={AlertTriangle} tone="crimson" label="Severe+" value={stats.severePlus} />
         <StatTile icon={ShieldCheck} tone="emerald" label="Closed" value={stats.closed} />
       </div>
+
+      {all.length > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {all.length.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">

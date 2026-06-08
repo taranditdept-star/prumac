@@ -51,11 +51,15 @@ export default async function InspectionsPage() {
   }
 
   const list = inspections ?? [];
+  // Stats over the whole table (not just the displayed page).
+  const { data: statRows } = await supabase
+    .schema("app").from("inspections").select("overall_result").limit(20000);
+  const all = (statRows ?? []) as { overall_result: "pass" | "attention" | "fail" }[];
   const stats = {
-    total: list.length,
-    pass: list.filter((i) => i.overall_result === "pass").length,
-    attention: list.filter((i) => i.overall_result === "attention").length,
-    fail: list.filter((i) => i.overall_result === "fail").length,
+    total: all.length,
+    pass: all.filter((i) => i.overall_result === "pass").length,
+    attention: all.filter((i) => i.overall_result === "attention").length,
+    fail: all.filter((i) => i.overall_result === "fail").length,
   };
 
   return (
@@ -73,6 +77,10 @@ export default async function InspectionsPage() {
         <Tile icon={AlertCircle} tone="amber" label="Attention" value={stats.attention} />
         <Tile icon={XCircle} tone="rose" label="Fail" value={stats.fail} />
       </div>
+
+      {stats.total > list.length && (
+        <p className="text-xs text-ink-500">Showing the latest {list.length.toLocaleString()} of {stats.total.toLocaleString()}.</p>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-2xl bg-white border border-ink-200/70 py-16 text-center">
