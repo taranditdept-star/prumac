@@ -173,108 +173,41 @@ export default async function DriverHomePage() {
         />
       </section>
 
-      {/* Quick actions */}
+      {/* Quick actions — the things a driver does on a trip */}
       <section>
         <p className="text-[10px] uppercase tracking-[0.14em] text-ink-400 font-bold mb-3 px-1">
           Quick actions
         </p>
         <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/checklist"
-            className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-emerald-300 active:scale-[0.98] transition-all overflow-hidden"
-          >
-            <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-emerald-500/10 blur-xl" />
-            <div className="relative">
-              <div className="h-12 w-12 rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center mb-3">
-                <ClipboardCheck className="h-6 w-6 text-emerald-600" />
-              </div>
-              <p className="text-sm font-bold text-ink-900">Vehicle checklist</p>
-              <p className="text-[11px] text-ink-500 mt-0.5">Inspect & rate condition</p>
-            </div>
-          </Link>
-          <Link
-            href="/fault/new"
-            className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 active:scale-[0.98] transition-all overflow-hidden"
-          >
-            <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-orange-500/10 blur-xl" />
-            <div className="relative">
-              <div className="h-12 w-12 rounded-2xl bg-orange-50 ring-1 ring-orange-100 flex items-center justify-center mb-3">
-                <ClipboardList className="h-6 w-6 text-orange-600" />
-              </div>
-              <p className="text-sm font-bold text-ink-900">Report fault</p>
-              <p className="text-[11px] text-ink-500 mt-0.5">Mechanical issue</p>
-            </div>
-          </Link>
-          <Link
-            href="/accident/new"
-            className="group relative rounded-3xl bg-white border border-rose-200/70 p-4 hover:border-rose-300 active:scale-[0.98] transition-all overflow-hidden"
-          >
-            <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-rose-500/10 blur-xl" />
-            <div className="relative">
-              <div className="h-12 w-12 rounded-2xl bg-rose-50 ring-1 ring-rose-100 flex items-center justify-center mb-3">
-                <AlertOctagon className="h-6 w-6 text-rose-600" />
-              </div>
-              <p className="text-sm font-bold text-ink-900">Report accident</p>
-              <p className="text-[11px] text-ink-500 mt-0.5">Incident / collision</p>
-            </div>
-          </Link>
+          <ActionCard href="/checklist" icon={ClipboardCheck} tone="emerald" title="Vehicle checklist" subtitle="Inspect & rate condition" />
+          <ActionCard href="/handover" icon={ArrowLeftRight} tone="orange" title="Handover" subtitle="Pass or take a vehicle" />
+          <ActionCard href="/fault/new" icon={ClipboardList} tone="amber" title="Report fault" subtitle="Mechanical issue" />
+          <ActionCard href="/accident/new" icon={AlertOctagon} tone="rose" title="Report accident" subtitle="Incident / collision" />
+          {/* Repair spans the full width */}
           <Link
             href="/repair/new"
-            className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-violet-300 active:scale-[0.98] transition-all overflow-hidden"
+            className="col-span-2 group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-violet-300 active:scale-[0.98] transition-all overflow-hidden flex items-center gap-4"
           >
             <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-violet-500/10 blur-xl" />
-            <div className="relative">
-              <div className="h-12 w-12 rounded-2xl bg-violet-50 ring-1 ring-violet-100 flex items-center justify-center mb-3">
-                <Wrench className="h-6 w-6 text-violet-600" />
-              </div>
-              <p className="text-sm font-bold text-ink-900">Log a repair</p>
-              <p className="text-[11px] text-ink-500 mt-0.5">Upload receipt for reimbursement</p>
+            <div className="relative h-12 w-12 rounded-2xl bg-violet-50 ring-1 ring-violet-100 flex items-center justify-center shrink-0">
+              <Wrench className="h-6 w-6 text-violet-600" />
             </div>
+            <div className="relative flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink-900">Log a repair</p>
+              <p className="text-[11px] text-ink-500 mt-0.5">Upload a receipt for reimbursement</p>
+            </div>
+            <ChevronRight className="relative h-4 w-4 text-ink-300 shrink-0" />
           </Link>
         </div>
       </section>
 
-      {/* Me: scorecard + leave */}
-      <section className="grid grid-cols-2 gap-3">
-        <Link
-          href="/scorecard"
-          className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-emerald-300 active:scale-[0.98] transition-all overflow-hidden"
-        >
-          <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-emerald-500/10 blur-xl" />
-          <div className="relative">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center mb-3">
-              <Award className="h-6 w-6 text-emerald-600" />
-            </div>
-            <p className="text-sm font-bold text-ink-900">My scorecard</p>
-            <p className="text-[11px] text-ink-500 mt-0.5">Safety rating</p>
-          </div>
-        </Link>
-        <Link
-          href="/leave"
-          className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-sky-300 active:scale-[0.98] transition-all overflow-hidden"
-        >
-          <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-sky-500/10 blur-xl" />
-          <div className="relative">
-            <div className="h-12 w-12 rounded-2xl bg-sky-50 ring-1 ring-sky-100 flex items-center justify-center mb-3">
-              <CalendarDays className="h-6 w-6 text-sky-600" />
-            </div>
-            <p className="text-sm font-bold text-ink-900">My leave</p>
-            <p className="text-[11px] text-ink-500 mt-0.5">Request time off</p>
-          </div>
-        </Link>
-        <Link
-          href="/handover"
-          className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 active:scale-[0.98] transition-all overflow-hidden"
-        >
-          <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-orange-500/10 blur-xl" />
-          <div className="relative">
-            <div className="h-12 w-12 rounded-2xl bg-orange-50 ring-1 ring-orange-100 flex items-center justify-center mb-3">
-              <ArrowLeftRight className="h-6 w-6 text-orange-600" />
-            </div>
-            <p className="text-sm font-bold text-ink-900">Handover</p>
-            <p className="text-[11px] text-ink-500 mt-0.5">Pass or take a vehicle</p>
-          </div>
-        </Link>
+      {/* You — personal */}
+      <section>
+        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-400 font-bold mb-3 px-1">You</p>
+        <div className="grid grid-cols-2 gap-3">
+          <ActionCard href="/scorecard" icon={Award} tone="emerald" title="My scorecard" subtitle="Safety rating" />
+          <ActionCard href="/leave" icon={CalendarDays} tone="sky" title="My leave" subtitle="Request time off" />
+        </div>
       </section>
 
       {/* Recent trips */}
@@ -491,6 +424,44 @@ function ReadyToRollHero({
         </Link>
       </div>
     </div>
+  );
+}
+
+function ActionCard({
+  href,
+  icon: Icon,
+  tone,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: "emerald" | "orange" | "amber" | "rose" | "sky" | "violet";
+  title: string;
+  subtitle: string;
+}) {
+  const t = {
+    emerald: { hover: "hover:border-emerald-300", glow: "bg-emerald-500/10", tile: "bg-emerald-50 ring-emerald-100", icon: "text-emerald-600" },
+    orange: { hover: "hover:border-orange-300", glow: "bg-orange-500/10", tile: "bg-orange-50 ring-orange-100", icon: "text-orange-600" },
+    amber: { hover: "hover:border-amber-300", glow: "bg-amber-500/10", tile: "bg-amber-50 ring-amber-100", icon: "text-amber-600" },
+    rose: { hover: "hover:border-rose-300", glow: "bg-rose-500/10", tile: "bg-rose-50 ring-rose-100", icon: "text-rose-600" },
+    sky: { hover: "hover:border-sky-300", glow: "bg-sky-500/10", tile: "bg-sky-50 ring-sky-100", icon: "text-sky-600" },
+    violet: { hover: "hover:border-violet-300", glow: "bg-violet-500/10", tile: "bg-violet-50 ring-violet-100", icon: "text-violet-600" },
+  }[tone];
+  return (
+    <Link
+      href={href}
+      className={`group relative rounded-3xl bg-white border border-ink-200/70 p-4 ${t.hover} active:scale-[0.98] transition-all overflow-hidden`}
+    >
+      <div className={`absolute -top-6 -right-6 h-20 w-20 rounded-full ${t.glow} blur-xl`} />
+      <div className="relative">
+        <div className={`h-12 w-12 rounded-2xl ${t.tile} ring-1 flex items-center justify-center mb-3`}>
+          <Icon className={`h-6 w-6 ${t.icon}`} />
+        </div>
+        <p className="text-sm font-bold text-ink-900">{title}</p>
+        <p className="text-[11px] text-ink-500 mt-0.5">{subtitle}</p>
+      </div>
+    </Link>
   );
 }
 

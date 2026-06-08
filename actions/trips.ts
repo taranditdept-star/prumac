@@ -198,7 +198,12 @@ export async function resumeTrip(tripId: string): Promise<ActionResult> {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// END trip — capture end odometer, status → ended
+// END trip — capture end odometer and AUTO-COMPLETE.
+// The driver ending a trip immediately completes it (status ended → completed,
+// reconciliation, vehicle freed) so they can start another trip right away,
+// without waiting for an admin to mark it complete — important for trips that
+// finish after hours. The DB state machine only allows in_progress→ended and
+// ended→completed, so we do both steps here.
 // ───────────────────────────────────────────────────────────────────────────
 export async function endTrip(formData: FormData): Promise<ActionResult> {
   await requireAuth();
@@ -225,12 +230,14 @@ export async function endTrip(formData: FormData): Promise<ActionResult> {
     return { error: "End odometer must be greater than or equal to start odometer." };
   }
 
+  // Step 1 — end the trip via the user client (RLS confirms the caller owns it).
+  const nowIso = new Date().toISOString();
   const { error } = await supabase
     .schema("app")
     .from("trips")
     .update({
       status: "ended",
-      ended_at: new Date().toISOString(),
+      ended_at: nowIso,
       end_odometer_km: parsed.data.end_odometer_km,
       fuel_litres: parsed.data.fuel_litres ?? null,
       fuel_amount: parsed.data.fuel_amount ?? null,
@@ -239,7 +246,40 @@ export async function endTrip(formData: FormData): Promise<ActionResult> {
 
   if (error) return { error: error.message };
 
+  // Step 2 — auto-complete. Uses the service client so it works regardless of
+  // role (drivers can't update vehicles under RLS). Reconciliation is best
+  // effort: a manager can re-run it from the reconciliation review page.
+  const service = createServiceClient();
+  const { error: completeErr } = await service
+    .schema("app")
+    .from("trips")
+    .update({ status: "completed", completed_at: nowIso })
+    .eq("id", parsed.data.trip_id);
+
+  if (completeErr) {
+    // The trip is safely "ended"; surface the error so it can be completed later.
+    revalidatePath(`/trips/${parsed.data.trip_id}`);
+    return { error: `Trip ended but auto-complete failed: ${completeErr.message}` };
+  }
+
+  const { error: recErr } = await service
+    .schema("app")
+    .rpc("fn_reconcile_trip", { p_trip_id: parsed.data.trip_id });
+  if (recErr) {
+    console.error("Reconciliation failed for trip", parsed.data.trip_id, recErr.message);
+  }
+
+  await service
+    .schema("app")
+    .from("vehicles")
+    .update({ status: "available" })
+    .eq("id", trip.vehicle_id);
+
   revalidatePath(`/trips/${parsed.data.trip_id}`);
+  revalidatePath("/trips");
+  revalidatePath("/home");
+  revalidatePath("/live");
+  revalidatePath("/reconciliation");
   return { success: true };
 }
 

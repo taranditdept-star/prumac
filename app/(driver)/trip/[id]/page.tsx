@@ -145,26 +145,31 @@ export default async function DriverTripPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      {/* Inspection CTA */}
-      <Link
-        href={`/inspection/${trip.id}?type=${trip.status === "ended" ? "post_trip" : "pre_trip"}`}
-        className="block rounded-2xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-all"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-orange-50 ring-1 ring-orange-100 flex items-center justify-center">
-            <ClipboardCheck className="h-5 w-5 text-orange-600" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-bold text-ink-900">
-              {trip.status === "ended" ? "Post-trip inspection" : "Pre-trip inspection"}
-            </p>
-            <p className="text-[11px] text-ink-500 mt-0.5">
-              Run the safety checklist before {trip.status === "ended" ? "completion" : "moving"}
-            </p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-ink-300" />
-        </div>
-      </Link>
+      {/* Inspection CTA — post-trip stays available after the trip auto-completes */}
+      {(() => {
+        const isPost = trip.status === "ended" || trip.status === "completed";
+        return (
+          <Link
+            href={`/inspection/${trip.id}?type=${isPost ? "post_trip" : "pre_trip"}`}
+            className="block rounded-2xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-orange-50 ring-1 ring-orange-100 flex items-center justify-center">
+                <ClipboardCheck className="h-5 w-5 text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-ink-900">
+                  {isPost ? "Post-trip inspection" : "Pre-trip inspection"}
+                </p>
+                <p className="text-[11px] text-ink-500 mt-0.5">
+                  {isPost ? "Record the vehicle's condition after the trip" : "Run the safety checklist before moving"}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-ink-300" />
+            </div>
+          </Link>
+        );
+      })()}
 
       {/* GPS tracker */}
       {(trip.status === "in_progress" || trip.status === "paused") && (

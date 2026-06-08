@@ -43,9 +43,24 @@ export default async function DriverLayout({ children }: { children: React.React
   const { data: driver } = await supabase
     .schema("app")
     .from("drivers")
-    .select("licence_number, licence_country")
+    .select("id, licence_number, licence_country")
     .eq("profile_id", profile.id)
-    .maybeSingle<{ licence_number: string; licence_country: string }>();
+    .maybeSingle<{ id: string; licence_number: string; licence_country: string }>();
+
+  // Is the driver mid-trip? The centre action becomes "Manage trip" if so.
+  let activeTripId: string | null = null;
+  if (driver) {
+    const { data: active } = await supabase
+      .schema("app")
+      .from("trips")
+      .select("id")
+      .eq("driver_id", driver.id)
+      .in("status", ["in_progress", "paused"])
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    activeTripId = active?.id ?? null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f5f7fb]">
@@ -59,7 +74,7 @@ export default async function DriverLayout({ children }: { children: React.React
         greeting={greetingFor()}
       />
       <main className="flex-1 overflow-y-auto pb-32">{children}</main>
-      <DriverBottomTabs />
+      <DriverBottomTabs activeTripId={activeTripId} />
     </div>
   );
 }

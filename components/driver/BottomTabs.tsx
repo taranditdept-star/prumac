@@ -2,28 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, History, AlertOctagon, ClipboardList, Play } from "lucide-react";
+import { Home, ClipboardCheck, AlertOctagon, ArrowLeftRight, Play, Navigation } from "lucide-react";
 
 const tabs = [
   { href: "/home", label: "Home", icon: Home },
-  { href: "/history", label: "History", icon: History },
-  // center slot reserved for FAB
-  { href: "/fault/new", label: "Fault", icon: ClipboardList },
+  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
+  // center slot reserved for the trip FAB
+  { href: "/handover", label: "Handover", icon: ArrowLeftRight },
   { href: "/accident/new", label: "Accident", icon: AlertOctagon },
 ] as const;
 
-export function DriverBottomTabs() {
+export function DriverBottomTabs({ activeTripId }: { activeTripId?: string | null }) {
   const pathname = usePathname();
+
+  // Mid-trip → the centre button manages the active trip (where End trip lives).
+  const onTrip = Boolean(activeTripId);
+  const fabHref = onTrip ? `/trip/${activeTripId}` : "/trip/start";
+  const FabIcon = onTrip ? Navigation : Play;
 
   return (
     <>
-      {/* Floating "start / manage trip" FAB */}
+      {/* Floating start / manage-trip FAB */}
       <Link
-        href="/trip/start"
-        aria-label="Start trip"
-        className="fixed bottom-[68px] left-1/2 -translate-x-1/2 z-50 h-16 w-16 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-xl shadow-orange-500/40 active:scale-95 transition-transform ring-4 ring-white"
+        href={fabHref}
+        aria-label={onTrip ? "Manage current trip" : "Start trip"}
+        className={`fixed bottom-[68px] left-1/2 -translate-x-1/2 z-50 h-16 w-16 rounded-full text-white flex items-center justify-center shadow-xl active:scale-95 transition-transform ring-4 ring-white ${
+          onTrip
+            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/40"
+            : "bg-gradient-to-br from-orange-500 to-orange-600 shadow-orange-500/40"
+        }`}
       >
-        <Play className="h-6 w-6 ml-0.5" strokeWidth={2.5} fill="currentColor" />
+        <FabIcon className={`h-6 w-6 ${onTrip ? "" : "ml-0.5"}`} strokeWidth={2.5} fill={onTrip ? "none" : "currentColor"} />
       </Link>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-ink-100 z-40 pb-[env(safe-area-inset-bottom,0px)]">
@@ -31,8 +40,12 @@ export function DriverBottomTabs() {
           {tabs.slice(0, 2).map((tab) => (
             <TabLink key={tab.href} {...tab} active={isActive(pathname, tab.href)} />
           ))}
-          {/* Spacer for FAB */}
-          <div />
+          {/* Centre column: label for the FAB */}
+          <div className="flex flex-col items-center justify-end h-full pb-1.5">
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${onTrip ? "text-emerald-600" : "text-orange-600"}`}>
+              {onTrip ? "Trip" : "Start"}
+            </span>
+          </div>
           {tabs.slice(2).map((tab) => (
             <TabLink key={tab.href} {...tab} active={isActive(pathname, tab.href)} />
           ))}

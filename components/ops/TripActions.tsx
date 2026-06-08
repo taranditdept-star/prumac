@@ -130,7 +130,7 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
         <div className="rounded-xl bg-violet-50 border border-violet-200 p-3 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-violet-600 mt-0.5 shrink-0" />
           <p className="text-xs text-violet-700">
-            Awaiting fleet manager review to mark completed.
+            Finalising this trip. If it doesn&apos;t complete shortly, your fleet manager can complete it.
           </p>
         </div>
       )}

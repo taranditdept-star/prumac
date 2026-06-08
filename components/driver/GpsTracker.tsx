@@ -43,6 +43,7 @@ export function GpsTracker({ tripId, status }: GpsTrackerProps) {
 
       <Message enabled={enabled} state={t.state} online={t.isOnline} error={t.lastError} />
 
+      {/* GPS permission still needs a user gesture; everything else syncs on its own */}
       {enabled && (t.state === "denied" || t.state === "error" || t.state === "insecure") && (
         <button
           type="button"
@@ -54,15 +55,12 @@ export function GpsTracker({ tripId, status }: GpsTrackerProps) {
         </button>
       )}
 
-      {(t.pingsBuffered > 0 || t.lastError) && (
-        <button
-          type="button"
-          onClick={() => t.flushNow()}
-          className="mt-2 w-full h-9 rounded-xl bg-ink-900 hover:bg-ink-800 text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
-        >
-          <CloudUpload className="h-3.5 w-3.5" />
-          Sync now
-        </button>
+      {/* Syncing is automatic — show a passive indicator when work is pending */}
+      {enabled && t.pingsBuffered > 0 && t.state === "tracking" && (
+        <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-ink-500">
+          <CloudUpload className="h-3.5 w-3.5 animate-pulse" />
+          Syncing {t.pingsBuffered} ping{t.pingsBuffered !== 1 ? "s" : ""} automatically…
+        </p>
       )}
     </div>
   );
