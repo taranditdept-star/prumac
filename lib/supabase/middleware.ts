@@ -28,9 +28,15 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
+  // Use getSession() (reads/refreshes via cookies) instead of getUser() (a
+  // network round-trip to the Auth server on EVERY request). Over a high-latency
+  // link to Supabase that round-trip was ~770ms per page. Data stays protected:
+  // Postgres verifies the JWT signature on every query (RLS), so a forged cookie
+  // can pass this redirect check but cannot read any data.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
 
   const { pathname } = request.nextUrl;
   const isPublicRoute =

@@ -11,9 +11,12 @@ import type { AppRole, ProfileRow } from "@/types/domain";
  */
 const loadProfile = cache(async (): Promise<ProfileRow | null> => {
   const supabase = await createClient();
+  // getSession() reads the cookie locally (the proxy already validated it),
+  // avoiding a getUser() network round-trip on every page render.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return null;
 
   const { data: profile } = await supabase
