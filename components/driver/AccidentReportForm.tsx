@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { reportAccident } from "@/actions/accidents";
 import { PhotoInput } from "@/components/primitives/PhotoInput";
-import { uploadPhotosToStorage } from "@/lib/storage/upload-photos";
 import type { CountryCode } from "@/types/domain";
 
 interface VehicleOpt {
@@ -46,35 +45,18 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
   const [otherParties, setOtherParties] = useState(false);
   const [injuries, setInjuries] = useState(false);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-
-    // Upload scene photos straight to Storage first, so only their paths (not
-    // the image bytes) go through the Server Action.
-    let photoPaths: string[] = [];
-    if (photoFiles.length > 0) {
-      setUploading(true);
-      try {
-        photoPaths = await uploadPhotosToStorage(photoFiles, "accident");
-      } catch {
-        setUploading(false);
-        toast.error("Couldn't upload the photos. Check your connection and try again.");
-        return;
-      }
-      setUploading(false);
-    }
-
-    const fd = new FormData(form);
-    fd.delete("photos"); // never stream image bytes through the action
+    const fd = new FormData(e.currentTarget);
+    fd.delete("photos");
     fd.set("vehicle_id", vehicle.id);
     if (activeTripId) fd.set("trip_id", activeTripId);
     fd.set("severity", severity);
     fd.set("other_parties_involved", otherParties ? "true" : "false");
     fd.set("injuries", injuries ? "true" : "false");
-    photoPaths.forEach((p) => fd.append("photo_paths", p));
+    // Attach the compressed scene photos (kept small client-side).
+    photoFiles.forEach((f) => fd.append("photos", f));
 
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -257,11 +239,11 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
 
       <button
         type="submit"
-        disabled={isPending || uploading}
+        disabled={isPending}
         className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 transition-all disabled:opacity-50"
       >
         <Send className="h-5 w-5" />
-        {uploading ? "Uploading photos…" : isPending ? "Reporting…" : "Submit accident report"}
+        {isPending ? "Reporting…" : "Submit accident report"}
       </button>
 
       <p className="text-[11px] text-ink-500 flex items-start gap-1.5">

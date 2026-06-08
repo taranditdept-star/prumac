@@ -60,15 +60,19 @@ export async function reportFault(formData: FormData): Promise<ActionResult<{ id
 
   if (error) return { error: error.message };
 
-  // Photos are uploaded direct to Storage by the browser; the action receives
-  // only their paths. Accept only keys inside the fault namespace.
-  const photoPaths = formData
-    .getAll("photo_paths")
-    .filter((p): p is string => typeof p === "string" && p.startsWith("fault/"));
-  if (photoPaths.length > 0) {
+  // Photos — compressed client-side, uploaded server-side via the service client.
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length > 0) {
     const service = createServiceClient();
-    const rows = photoPaths.map((file_path) => ({ fault_id: data.id, file_path }));
-    await service.schema("app").from("fault_photos").insert(rows);
+    for (const file of files) {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `fault/${data.id}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await service.storage
+        .from("photos")
+        .upload(path, file, { upsert: false, contentType: file.type || "image/jpeg" });
+      if (upErr) continue;
+      await service.schema("app").from("fault_photos").insert({ fault_id: data.id, file_path: path });
+    }
   }
 
   // Raise an alert if severity is high or critical

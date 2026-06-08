@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { reportFault } from "@/actions/faults";
 import { PhotoInput } from "@/components/primitives/PhotoInput";
-import { uploadPhotosToStorage } from "@/lib/storage/upload-photos";
 import { FAULT_CATEGORIES } from "@/lib/validation/fault";
 import type { CountryCode } from "@/types/domain";
 
@@ -45,32 +44,15 @@ export function FaultReportForm({ vehicle, activeTripId }: FaultReportFormProps)
   const [isPending, startTransition] = useTransition();
   const [severity, setSeverity] = useState<"low" | "medium" | "high" | "critical">("medium");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-
-    // Upload photos direct to Storage first — only their paths go to the action.
-    let photoPaths: string[] = [];
-    if (photoFiles.length > 0) {
-      setUploading(true);
-      try {
-        photoPaths = await uploadPhotosToStorage(photoFiles, "fault");
-      } catch {
-        setUploading(false);
-        toast.error("Couldn't upload the photos. Check your connection and try again.");
-        return;
-      }
-      setUploading(false);
-    }
-
-    const fd = new FormData(form);
+    const fd = new FormData(e.currentTarget);
     fd.delete("photos");
     fd.set("vehicle_id", vehicle.id);
     if (activeTripId) fd.set("trip_id", activeTripId);
     fd.set("severity", severity);
-    photoPaths.forEach((p) => fd.append("photo_paths", p));
+    photoFiles.forEach((f) => fd.append("photos", f));
 
     // Capture location if available
     if ("geolocation" in navigator) {
@@ -198,11 +180,11 @@ export function FaultReportForm({ vehicle, activeTripId }: FaultReportFormProps)
 
       <button
         type="submit"
-        disabled={isPending || uploading}
+        disabled={isPending}
         className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 transition-all disabled:opacity-50"
       >
         <Send className="h-5 w-5" />
-        {uploading ? "Uploading photos…" : isPending ? "Reporting…" : "Submit fault report"}
+        {isPending ? "Reporting…" : "Submit fault report"}
       </button>
 
       <p className="text-[11px] text-ink-500 flex items-start gap-1.5">
