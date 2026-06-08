@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Play, Gauge, Camera, Lock, X } from "lucide-react";
+import { Play, Gauge, Camera, Lock, X, ShieldCheck, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { startTrip } from "@/actions/trips";
@@ -14,6 +14,7 @@ interface DriverStartTripFormProps {
   subsidiaries: { id: string; name: string }[];
   defaultSubsidiaryId: string | null;
   currentOdometer: number;
+  agreement: { id: string; title: string; body_md: string } | null;
 }
 
 const PURPOSES = [
@@ -32,10 +33,13 @@ export function DriverStartTripForm({
   subsidiaries,
   defaultSubsidiaryId,
   currentOdometer,
+  agreement,
 }: DriverStartTripFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -44,9 +48,15 @@ export function DriverStartTripForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (agreement && !accepted) {
+      toast.error("Please accept the vehicle-use terms to continue.");
+      setShowTerms(true);
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     fd.set("vehicle_id", vehicleId);
     fd.set("driver_id", driverId);
+    fd.set("terms_accepted", accepted ? "true" : "false");
     startTransition(async () => {
       try {
         const result = await startTrip(fd);
@@ -205,14 +215,88 @@ export function DriverStartTripForm({
         </p>
       </div>
 
+      {/* Vehicle-use terms — must be accepted before starting */}
+      {agreement && (
+        <div className="rounded-2xl bg-ink-50 border border-ink-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck className="h-4 w-4 text-ink-500" />
+            <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-600">
+              Vehicle-use terms
+            </Label>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-ink-300 text-orange-600 focus:ring-orange-500/30"
+            />
+            <span className="text-sm text-ink-700 leading-snug">
+              I have read and accept the{" "}
+              <button
+                type="button"
+                onClick={() => setShowTerms(true)}
+                className="font-bold text-orange-600 underline underline-offset-2"
+              >
+                {agreement.title}
+              </button>
+              .
+            </span>
+          </label>
+        </div>
+      )}
+
       <button
         type="submit"
-        disabled={isPending}
-        className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 transition-all disabled:opacity-50"
+        disabled={isPending || (!!agreement && !accepted)}
+        className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Play className="h-5 w-5" />
         {isPending ? "Starting…" : "Start trip"}
       </button>
+
+      {/* Terms modal */}
+      {agreement && showTerms && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-950/60 backdrop-blur-sm p-4"
+          onClick={() => setShowTerms(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 flex items-center justify-between gap-3 bg-white border-b border-ink-100 px-5 py-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-4 w-4 text-orange-600 shrink-0" />
+                <p className="text-sm font-bold text-ink-900 truncate">{agreement.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTerms(false)}
+                className="h-8 w-8 rounded-lg bg-ink-100 hover:bg-ink-200 flex items-center justify-center shrink-0"
+              >
+                <X className="h-4 w-4 text-ink-600" />
+              </button>
+            </div>
+            <div className="px-5 py-4 text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
+              {agreement.body_md}
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-ink-100 p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccepted(true);
+                  setShowTerms(false);
+                }}
+                className="w-full h-12 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold inline-flex items-center justify-center gap-2"
+              >
+                <ShieldCheck className="h-5 w-5" />
+                I accept these terms
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

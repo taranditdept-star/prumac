@@ -30,8 +30,8 @@ export default async function DriverStartTripPage() {
     );
   }
 
-  // Fetch all currently-assigned vehicles + subsidiaries
-  const [{ data: assignments }, { data: subs }] = await Promise.all([
+  // Fetch all currently-assigned vehicles + subsidiaries + the active terms
+  const [{ data: assignments }, { data: subs }, { data: agreement }] = await Promise.all([
     supabase
       .schema("app")
       .from("vehicle_assignments")
@@ -42,6 +42,13 @@ export default async function DriverStartTripPage() {
       .returns<{ vehicles: AssignedVehicle | null }[]>(),
     // Drivers can't read app.subsidiaries directly (RLS); use the safe RPC.
     supabase.schema("app").rpc("fn_subsidiary_options"),
+    supabase
+      .schema("app")
+      .from("agreements")
+      .select("id, title, body_md")
+      .eq("kind", "trip_terms")
+      .eq("is_active", true)
+      .maybeSingle<{ id: string; title: string; body_md: string }>(),
   ]);
 
   const subsidiaryOptions = (Array.isArray(subs) ? subs : []) as { id: string; name: string }[];
@@ -70,7 +77,12 @@ export default async function DriverStartTripPage() {
           <p className="text-sm text-amber-700">No vehicle assigned. Speak to your fleet manager.</p>
         </div>
       ) : (
-        <StartTripPicker vehicles={vehicles} driverId={driver.id} subsidiaries={subsidiaryOptions} />
+        <StartTripPicker
+          vehicles={vehicles}
+          driverId={driver.id}
+          subsidiaries={subsidiaryOptions}
+          agreement={agreement ?? null}
+        />
       )}
     </div>
   );

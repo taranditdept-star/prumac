@@ -1,0 +1,11 @@
+-- 0027_inspection_standalone_enum.sql
+-- ---------------------------------------------------------------------------
+-- Add 'daily_checklist' to inspection_type so drivers can complete the
+-- standard vehicle checklist OUTSIDE of a dispatched trip.
+--
+-- IMPORTANT: ALTER TYPE ... ADD VALUE cannot run inside a transaction block,
+-- and the new value cannot be referenced in the same transaction. It is kept
+-- in its own migration (no BEGIN/COMMIT) so 0028 — which references it — runs
+-- only after this has committed.
+-- ---------------------------------------------------------------------------
+ALTER TYPE app.inspection_type ADD VALUE IF NOT EXISTS 'daily_checklist';

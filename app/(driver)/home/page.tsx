@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
-  Gauge, Truck, Play, ChevronRight, ShieldCheck, ClipboardList, AlertOctagon,
-  Activity, MapPin, Clock, CalendarDays, Award,
+  Gauge, Truck, Play, ChevronRight, ShieldCheck, ClipboardList, ClipboardCheck, AlertOctagon,
+  Activity, MapPin, Clock, CalendarDays, Award, Wrench, ArrowLeftRight,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -68,6 +68,15 @@ export default async function DriverHomePage() {
   let assignedCount = 0;
   let recent: RecentTrip[] = [];
   let stats = { trips: 0, totalKm: 0 };
+  let pendingTakeovers = 0;
+
+  // Incoming handovers awaiting this driver's confirmation
+  const { data: handovers } = await supabase.schema("app").rpc("fn_my_handovers");
+  if (Array.isArray(handovers)) {
+    pendingTakeovers = handovers.filter(
+      (h: { direction: string; status: string }) => h.direction === "incoming" && h.status === "pending",
+    ).length;
+  }
 
   if (driver) {
     const [{ data: trip }, { data: a }, { data: r }, { data: allTrips }] = await Promise.all([
@@ -122,6 +131,25 @@ export default async function DriverHomePage() {
 
   return (
     <div className="px-4 py-5 space-y-5">
+      {/* Pending takeover banner */}
+      {pendingTakeovers > 0 && (
+        <Link
+          href="/handover"
+          className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-500 p-4 text-white active:scale-[0.99] transition-transform"
+        >
+          <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+            <ArrowLeftRight className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold">
+              {pendingTakeovers} vehicle{pendingTakeovers !== 1 ? "s" : ""} waiting for your takeover
+            </p>
+            <p className="text-[11px] text-white/85">Inspect and confirm to accept the vehicle</p>
+          </div>
+          <ChevronRight className="h-5 w-5" />
+        </Link>
+      )}
+
       {/* Hero card — active trip OR ready to roll */}
       {activeTrip ? (
         <ActiveTripHero trip={activeTrip} />
@@ -152,6 +180,19 @@ export default async function DriverHomePage() {
         </p>
         <div className="grid grid-cols-2 gap-3">
           <Link
+            href="/checklist"
+            className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-emerald-300 active:scale-[0.98] transition-all overflow-hidden"
+          >
+            <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-emerald-500/10 blur-xl" />
+            <div className="relative">
+              <div className="h-12 w-12 rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center mb-3">
+                <ClipboardCheck className="h-6 w-6 text-emerald-600" />
+              </div>
+              <p className="text-sm font-bold text-ink-900">Vehicle checklist</p>
+              <p className="text-[11px] text-ink-500 mt-0.5">Inspect & rate condition</p>
+            </div>
+          </Link>
+          <Link
             href="/fault/new"
             className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 active:scale-[0.98] transition-all overflow-hidden"
           >
@@ -175,6 +216,19 @@ export default async function DriverHomePage() {
               </div>
               <p className="text-sm font-bold text-ink-900">Report accident</p>
               <p className="text-[11px] text-ink-500 mt-0.5">Incident / collision</p>
+            </div>
+          </Link>
+          <Link
+            href="/repair/new"
+            className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-violet-300 active:scale-[0.98] transition-all overflow-hidden"
+          >
+            <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-violet-500/10 blur-xl" />
+            <div className="relative">
+              <div className="h-12 w-12 rounded-2xl bg-violet-50 ring-1 ring-violet-100 flex items-center justify-center mb-3">
+                <Wrench className="h-6 w-6 text-violet-600" />
+              </div>
+              <p className="text-sm font-bold text-ink-900">Log a repair</p>
+              <p className="text-[11px] text-ink-500 mt-0.5">Upload receipt for reimbursement</p>
             </div>
           </Link>
         </div>
@@ -206,6 +260,19 @@ export default async function DriverHomePage() {
             </div>
             <p className="text-sm font-bold text-ink-900">My leave</p>
             <p className="text-[11px] text-ink-500 mt-0.5">Request time off</p>
+          </div>
+        </Link>
+        <Link
+          href="/handover"
+          className="group relative rounded-3xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 active:scale-[0.98] transition-all overflow-hidden"
+        >
+          <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-orange-500/10 blur-xl" />
+          <div className="relative">
+            <div className="h-12 w-12 rounded-2xl bg-orange-50 ring-1 ring-orange-100 flex items-center justify-center mb-3">
+              <ArrowLeftRight className="h-6 w-6 text-orange-600" />
+            </div>
+            <p className="text-sm font-bold text-ink-900">Handover</p>
+            <p className="text-[11px] text-ink-500 mt-0.5">Pass or take a vehicle</p>
           </div>
         </Link>
       </section>

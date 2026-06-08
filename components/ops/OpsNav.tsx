@@ -23,6 +23,7 @@ import {
   CalendarDays,
   Banknote,
   ScrollText,
+  ArrowLeftRight,
 } from "lucide-react";
 import type { AppRole } from "@/types/domain";
 
@@ -44,6 +45,7 @@ const SECTIONS = [
       { href: "/drivers", label: "Drivers", icon: Users, roles: ALL },
       { href: "/drivers/scorecards", label: "Scorecards", icon: Trophy, roles: ALL },
       { href: "/drivers/leave", label: "Leave", icon: CalendarDays, roles: ALL },
+      { href: "/handovers", label: "Handovers", icon: ArrowLeftRight, roles: ALL },
     ],
   },
   {
@@ -69,6 +71,7 @@ const SECTIONS = [
     title: "Finance & admin",
     items: [
       { href: "/invoices", label: "Invoices", icon: Receipt, roles: ALL },
+      { href: "/repairs", label: "Repair claims", icon: Wrench, roles: ALL },
       { href: "/vehicles/lifecycle", label: "Depreciation", icon: Banknote, roles: ALL },
       { href: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
       { href: "/audit", label: "Audit log", icon: ScrollText, roles: ["admin"] },

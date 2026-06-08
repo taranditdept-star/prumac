@@ -20,9 +20,10 @@ interface Props {
   vehicles: AssignedVehicle[];
   driverId: string;
   subsidiaries: { id: string; name: string }[];
+  agreement: { id: string; title: string; body_md: string } | null;
 }
 
-export function StartTripPicker({ vehicles, driverId, subsidiaries }: Props) {
+export function StartTripPicker({ vehicles, driverId, subsidiaries, agreement }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     vehicles.length === 1 ? vehicles[0].id : null,
   );
@@ -94,6 +95,7 @@ export function StartTripPicker({ vehicles, driverId, subsidiaries }: Props) {
           subsidiaries={subsidiaries}
           defaultSubsidiaryId={selected.default_subsidiary_id}
           currentOdometer={selected.current_odometer_km}
+          agreement={agreement}
         />
       ) : (
         <p className="text-sm text-ink-500 px-1">Select a vehicle above to continue.</p>

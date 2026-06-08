@@ -19,6 +19,7 @@ const OPS = [
 
 const FINANCE = [
   { href: "/invoices", label: "Invoices", icon: Receipt, roles: ["subsidiary_billing", "fleet_manager", "admin"] },
+  { href: "/repairs", label: "Repair claims", icon: Wrench, roles: ["subsidiary_billing", "fleet_manager", "admin"] },
   { href: "/maintenance", label: "Maintenance", icon: Wrench, roles: ["fleet_manager", "admin"] },
   { href: "/rates", label: "Rates", icon: DollarSign, roles: ["admin"] },
   { href: "/subsidiaries", label: "Subsidiaries", icon: Building, roles: ["admin"] },

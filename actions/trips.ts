@@ -51,6 +51,23 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
+  // Drivers must accept the active vehicle-use agreement before a trip starts.
+  // We resolve the active version server-side and record which one was accepted,
+  // rather than trusting a client-sent id.
+  const { data: agreement } = await supabase
+    .schema("app")
+    .from("agreements")
+    .select("id")
+    .eq("kind", "trip_terms")
+    .eq("is_active", true)
+    .maybeSingle<{ id: string }>();
+
+  const termsAccepted =
+    formData.get("terms_accepted") === "true" || formData.get("terms_accepted") === "on";
+  if (profile.role === "driver" && agreement && !termsAccepted) {
+    return { error: "You must accept the vehicle-use terms before starting a trip." };
+  }
+
   // Last known reading for this vehicle — used to detect a rolled-back or
   // implausibly-jumped start odometer.
   const { data: vehicle } = await supabase
@@ -76,6 +93,8 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
       status: "in_progress",
       started_at: nowIso,
       created_by: profile.id,
+      terms_agreement_id: termsAccepted ? (agreement?.id ?? null) : null,
+      terms_accepted_at: termsAccepted ? nowIso : null,
     })
     .select("id")
     .single<{ id: string }>();

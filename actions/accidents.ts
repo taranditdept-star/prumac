@@ -91,17 +91,9 @@ export async function reportAccident(formData: FormData): Promise<ActionResult<{
     }
   }
 
-  // Always raise an alert — accidents are critical
-  const service = createServiceClient();
-  await service.schema("app").from("alerts").insert({
-    kind: "accident_reported",
-    severity: parsed.data.severity === "fatal" || parsed.data.severity === "severe" ? "critical" : "warning",
-    vehicle_id: parsed.data.vehicle_id,
-    trip_id: parsed.data.trip_id ?? null,
-    accident_id: data.id,
-    title: `Accident · ${parsed.data.severity} · ${parsed.data.location_description}`,
-    body: parsed.data.description.slice(0, 200),
-  });
+  // Alert is raised automatically by the accidents_raise_alert trigger
+  // (app.fn_alert_on_accident, SECURITY DEFINER) — do not insert here too,
+  // or every accident would produce a duplicate alert.
 
   revalidatePath("/accidents");
   revalidatePath("/home");

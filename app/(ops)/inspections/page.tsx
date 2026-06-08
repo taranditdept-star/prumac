@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 interface InspectionRow {
   id: string;
-  trip_id: string;
-  type: "pre_trip" | "post_trip";
+  trip_id: string | null;
+  type: "pre_trip" | "post_trip" | "daily_checklist";
   overall_result: "pass" | "attention" | "fail";
   odometer_km: number;
   completed_at: string;
@@ -63,7 +63,7 @@ export default async function InspectionsPage() {
       <div>
         <h1 className="text-2xl lg:text-3xl font-bold text-ink-900 tracking-tight">Inspections</h1>
         <p className="text-sm text-ink-500 mt-1">
-          Pre-trip and post-trip inspections from driver mobile devices
+          Pre-trip, post-trip and standalone vehicle checklists from driver mobile devices
         </p>
       </div>
 
@@ -106,21 +106,34 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4 text-ink-700">
                     <span className="inline-flex items-center rounded-md bg-ink-100 px-1.5 py-0.5 text-xs font-bold text-ink-700 capitalize">
-                      {i.type.replace("_", " ")}
+                      {i.type.replaceAll("_", " ")}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     {i.vehicles && (
-                      <Link href={`/trips/${i.trip_id}`} className="block">
-                        <PlateBadge
-                          plate={i.vehicles.plate_number}
-                          country={i.vehicles.plate_country}
-                          size="sm"
-                        />
-                        <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
-                          {i.vehicles.make} {i.vehicles.model}
-                        </p>
-                      </Link>
+                      i.trip_id ? (
+                        <Link href={`/trips/${i.trip_id}`} className="block">
+                          <PlateBadge
+                            plate={i.vehicles.plate_number}
+                            country={i.vehicles.plate_country}
+                            size="sm"
+                          />
+                          <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
+                            {i.vehicles.make} {i.vehicles.model}
+                          </p>
+                        </Link>
+                      ) : (
+                        <div className="block">
+                          <PlateBadge
+                            plate={i.vehicles.plate_number}
+                            country={i.vehicles.plate_country}
+                            size="sm"
+                          />
+                          <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
+                            {i.vehicles.make} {i.vehicles.model}
+                          </p>
+                        </div>
+                      )
                     )}
                   </td>
                   <td className="px-6 py-4 text-ink-700">
@@ -131,12 +144,14 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{fmt(i.completed_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link
-                      href={`/trips/${i.trip_id}`}
-                      className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
-                    >
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
+                    {i.trip_id && (
+                      <Link
+                        href={`/trips/${i.trip_id}`}
+                        className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
+                      >
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}
