@@ -1,0 +1,13 @@
+import { pgClient } from "./lib.mjs";
+const c = await pgClient();
+console.log("completed trips:", (await c.query("SELECT count(*)::int n FROM app.trips WHERE status='completed'")).rows[0].n);
+console.log("trips with fuel cost:", (await c.query("SELECT count(*)::int n FROM app.trips WHERE fuel_amount IS NOT NULL")).rows[0].n);
+console.log("service/repair records:", (await c.query("SELECT count(*)::int n, round(sum(total_amount))::int total_usd FROM app.service_records")).rows[0]);
+console.log("date span:", (await c.query("SELECT min(started_at)::date mn, max(started_at)::date mx FROM app.trips WHERE status='completed'")).rows[0]);
+console.log("\nfilter sample — June 2026 only:");
+console.table((await c.query("SELECT count(*)::int trips FROM app.trips WHERE status='completed' AND started_at>='2026-06-01' AND started_at<'2026-07-01'")).rows);
+console.log("filter sample — 2025 only:");
+console.table((await c.query("SELECT count(*)::int trips FROM app.trips WHERE status='completed' AND started_at>='2025-01-01' AND started_at<'2026-01-01'")).rows);
+console.log("filter sample — one vehicle (AGH 2028):");
+console.table((await c.query("SELECT count(*)::int trips FROM app.trips t JOIN app.vehicles v ON v.id=t.vehicle_id WHERE v.plate_number='AGH 2028'")).rows);
+await c.end();
