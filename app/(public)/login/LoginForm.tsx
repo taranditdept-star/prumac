@@ -3,13 +3,11 @@
 import { useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { signInWithEmail } from "@/actions/auth";
 import { signInWithEmailForm } from "@/actions/auth-form";
-import { Logo } from "@/components/brand/Logo";
+
+const inputClass =
+  "h-12 w-full rounded-xl border border-ink-200 bg-white px-4 text-base text-ink-900 placeholder:text-ink-400 transition-all focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/30";
 
 export default function LoginForm() {
   const [isPending, startTransition] = useTransition();
@@ -44,62 +42,60 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-center text-center gap-3">
-        <Logo height={52} />
-        <p className="text-sm text-ink-500">Fleet management platform</p>
-      </div>
-      <Card className="border border-ink-200/60 shadow-2xl shadow-ink-900/5 backdrop-blur-xl bg-white/90">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>Enter your username and password</CardDescription>
-        </CardHeader>
+    <div className="rounded-3xl border border-ink-200/70 bg-white/95 p-7 shadow-2xl shadow-ink-900/10 backdrop-blur-xl sm:p-8">
+      <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">Sign in</h1>
+      <p className="mt-1 text-sm text-ink-500">Welcome back — enter your details to continue.</p>
 
-        <CardContent className="space-y-4">
-          {message === "password-updated" && (
-            <p className="text-sm text-emerald-700 bg-emerald-50 rounded p-2">
-              Password updated — please sign in.
-            </p>
-          )}
+      {message === "password-updated" && (
+        <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          Password updated — please sign in.
+        </p>
+      )}
 
-          <form action={signInWithEmailForm} onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="e.g. PMD001"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/30 text-white"
-              disabled={isPending}
-            >
-              {isPending ? "Signing in…" : "Sign in"}
-            </Button>
-            <p className="text-center text-xs text-ink-400">
-              Forgot your password? Contact your fleet administrator.
-            </p>
-          </form>
-        </CardContent>
-      </Card>
+      <form action={signInWithEmailForm} onSubmit={handleLogin} className="mt-6 space-y-4">
+        <div>
+          <label htmlFor="username" className="mb-1.5 block text-sm font-semibold text-ink-700">
+            Username
+          </label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="e.g. PMD001"
+            required
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-ink-700">
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            required
+            className={inputClass}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={isPending}
+          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:bg-orange-600 active:scale-[0.99] disabled:opacity-50"
+        >
+          {isPending ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+
+      <p className="mt-5 text-center text-xs text-ink-400">
+        Forgot your password? Contact your fleet administrator.
+      </p>
     </div>
   );
 }

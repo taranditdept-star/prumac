@@ -15,7 +15,7 @@ export const accidentCreateSchema = z.object({
   lng: z.coerce.number().min(-180).max(180).nullable().optional(),
   weather: z.string().max(60).nullable().optional(),
   road_conditions: z.string().max(60).nullable().optional(),
-  description: z.string().min(10, "Describe what happened").max(4000),
+  description: z.string().trim().min(2, "Add a short description of what happened").max(4000),
   other_parties_involved: z.coerce.boolean().default(false),
   third_party_details: z.string().max(2000).nullable().optional(),
   injuries: z.coerce.boolean().default(false),

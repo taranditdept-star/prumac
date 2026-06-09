@@ -65,6 +65,7 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
   const [otherParties, setOtherParties] = useState(draft.other_parties_involved === "1");
   const [injuries, setInjuries] = useState(draft.injuries === "1");
   const [photoPaths, setPhotoPaths] = useState<string[]>([]);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist every field so an Android tab-discard (common while the camera is
   // open) never loses what's been typed.
@@ -82,6 +83,14 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
       /* quota — fields still held in the live DOM */
     }
   }
+
+  // Debounce text-input saves — serialising the whole form on every keystroke
+  // makes typing feel laggy on low-end phones.
+  function scheduleSave() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(saveDraft, 600);
+  }
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
   // Re-save when the toggle/severity state changes (text inputs save on input).
   useEffect(() => {
@@ -134,7 +143,7 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} onInput={saveDraft} className="space-y-4">
+    <form ref={formRef} onSubmit={handleSubmit} onInput={scheduleSave} className="space-y-4">
       {/* 1 · Severity */}
       <FormSection step={1} title="How serious is it?">
         <div className="grid grid-cols-2 gap-2.5">
@@ -198,7 +207,8 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
       </FormSection>
 
       {/* 3 · Conditions & people */}
-      <FormSection step={3} title="Conditions & people involved">
+      <FormSection step={3} title="Conditions & people involved" hint="Optional — add what you can. You can submit without these.">
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <FieldLabel>Weather</FieldLabel>
