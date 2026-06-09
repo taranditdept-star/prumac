@@ -42,6 +42,17 @@ export async function savePushSubscription(sub: {
   return { success: true };
 }
 
+/**
+ * Whether the SERVER can actually send web push — i.e. the VAPID private key
+ * (and public key) are present in this deployment's runtime env. The client
+ * can subscribe with only the public key, so this catches the common case
+ * where the private key wasn't set on the host.
+ */
+export async function pushServerReady(): Promise<boolean> {
+  await requireAuth();
+  return Boolean(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+}
+
 /** Remove a subscription (e.g. the user disabled notifications). */
 export async function deletePushSubscription(endpoint: string): Promise<ActionResult> {
   await requireAuth();

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { BellRing, BellOff, Volume2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { getPushStatus, enablePush, fireTestAlarm, type PushStatus } from "@/lib/push/client";
+import { pushServerReady } from "@/actions/push";
 
 /**
  * Emergency-alert control for managers/admins. Shows whether push is enabled on
@@ -13,10 +14,12 @@ import { getPushStatus, enablePush, fireTestAlarm, type PushStatus } from "@/lib
  */
 export function AlertsStatus() {
   const [status, setStatus] = useState<PushStatus | null>(null);
+  const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     getPushStatus().then(setStatus);
+    pushServerReady().then(setServerReady).catch(() => setServerReady(null));
   }, []);
 
   function handleEnable() {
@@ -33,9 +36,25 @@ export function AlertsStatus() {
 
   const enabled = status === "subscribed";
 
+  // Server can't actually send push (VAPID private key missing on the host) —
+  // surface it, since the client side can look "enabled" while sends no-op.
+  const serverWarn =
+    serverReady === false ? (
+      <div className="flex items-start gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          <b>Push isn&apos;t fully configured on the server.</b> Devices can subscribe, but accidents
+          won&apos;t reach closed apps until <code className="font-mono">VAPID_PRIVATE_KEY</code> and{" "}
+          <code className="font-mono">VAPID_SUBJECT</code> are set in Vercel and the app is redeployed.
+        </span>
+      </div>
+    ) : null;
+
+  const wrap = (node: ReactNode) => <div className="space-y-2">{serverWarn}{node}</div>;
+
   // Compact confirmation strip once enabled.
   if (enabled) {
-    return (
+    return wrap(
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
           <CheckCircle2 className="h-4 w-4" />
@@ -74,7 +93,7 @@ export function AlertsStatus() {
   const m = message[status];
   const Icon = m.icon;
 
-  return (
+  return wrap(
     <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-orange-200">
