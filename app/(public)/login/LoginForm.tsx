@@ -7,7 +7,7 @@ import { signInWithEmail } from "@/actions/auth";
 import { signInWithEmailForm } from "@/actions/auth-form";
 
 const inputClass =
-  "h-12 w-full rounded-xl border border-ink-200 bg-white px-4 text-base text-ink-900 placeholder:text-ink-400 transition-all focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/30";
+  "h-14 w-full rounded-xl border border-ink-200 bg-white px-4 text-base text-ink-900 placeholder:text-ink-400 transition-all focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/30";
 
 export default function LoginForm() {
   const [isPending, startTransition] = useTransition();
@@ -42,9 +42,9 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="rounded-3xl border border-ink-200/70 bg-white/95 p-7 shadow-2xl shadow-ink-900/10 backdrop-blur-xl sm:p-8">
-      <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">Sign in</h1>
-      <p className="mt-1 text-sm text-ink-500">Welcome back — enter your details to continue.</p>
+    <div className="rounded-3xl border border-ink-200/70 bg-white/95 p-8 shadow-2xl shadow-ink-900/10 backdrop-blur-xl sm:p-10">
+      <h1 className="text-3xl font-extrabold tracking-tight text-ink-900">Sign in</h1>
+      <p className="mt-1.5 text-[15px] text-ink-500">Welcome back — enter your details to continue.</p>
 
       {message === "password-updated" && (
         <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -52,7 +52,7 @@ export default function LoginForm() {
         </p>
       )}
 
-      <form action={signInWithEmailForm} onSubmit={handleLogin} className="mt-6 space-y-4">
+      <form action={signInWithEmailForm} onSubmit={handleLogin} className="mt-7 space-y-5">
         <div>
           <label htmlFor="username" className="mb-1.5 block text-sm font-semibold text-ink-700">
             Username
@@ -87,13 +87,13 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:bg-orange-600 active:scale-[0.99] disabled:opacity-50"
+          className="inline-flex h-14 w-full items-center justify-center rounded-xl bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:bg-orange-600 active:scale-[0.99] disabled:opacity-50"
         >
           {isPending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      <p className="mt-5 text-center text-xs text-ink-400">
+      <p className="mt-6 text-center text-[13px] text-ink-400">
         Forgot your password? Contact your fleet administrator.
       </p>
     </div>
