@@ -1,0 +1,109 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { BellRing, BellOff, Volume2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import { getPushStatus, enablePush, fireTestAlarm, type PushStatus } from "@/lib/push/client";
+
+/**
+ * Emergency-alert control for managers/admins. Shows whether push is enabled on
+ * this device, lets them enable it, and lets them test the in-app siren (the
+ * test click also unlocks browser audio). Self-diagnoses a missing server VAPID
+ * config so it's obvious when push hasn't been set up on the host.
+ */
+export function AlertsStatus() {
+  const [status, setStatus] = useState<PushStatus | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    getPushStatus().then(setStatus);
+  }, []);
+
+  function handleEnable() {
+    startTransition(async () => {
+      const ok = await enablePush();
+      setStatus(await getPushStatus());
+      if (ok) toast.success("Emergency alerts enabled on this device.");
+      else toast.error("Couldn't enable alerts — check your browser's notification permission.");
+    });
+  }
+
+  // While we don't know yet, render nothing (avoids a flash).
+  if (status === null) return null;
+
+  const enabled = status === "subscribed";
+
+  // Compact confirmation strip once enabled.
+  if (enabled) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
+          <CheckCircle2 className="h-4 w-4" />
+          Emergency alerts are on for this device — accidents will ring even when the app is closed.
+        </span>
+        <button
+          type="button"
+          onClick={fireTestAlarm}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+        >
+          <Volume2 className="h-3.5 w-3.5" /> Test alarm
+        </button>
+      </div>
+    );
+  }
+
+  // Otherwise a fuller prompt with the relevant message + actions.
+  const message: Record<Exclude<PushStatus, "subscribed">, { icon: typeof BellOff; text: string }> = {
+    default: {
+      icon: BellRing,
+      text: "Turn on accident alerts so this device rings the moment a driver reports one — even when the app is closed.",
+    },
+    blocked: {
+      icon: BellOff,
+      text: "Notifications are blocked for this site. Allow them in your browser's site settings, then enable here.",
+    },
+    unsupported: {
+      icon: AlertTriangle,
+      text: "This browser can't receive push alerts. Use Chrome/Edge on Android or desktop, or install the app on iPhone (Add to Home Screen).",
+    },
+    unconfigured: {
+      icon: AlertTriangle,
+      text: "Push notifications aren't configured on the server yet. Set the VAPID keys in the Vercel environment to enable closed-app alerts.",
+    },
+  };
+  const m = message[status];
+  const Icon = m.icon;
+
+  return (
+    <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-orange-200">
+          <Icon className="h-5 w-5 text-orange-600" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-ink-900">Emergency accident alerts</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-600">{m.text}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {status === "default" && (
+              <button
+                type="button"
+                onClick={handleEnable}
+                disabled={pending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                <BellRing className="h-3.5 w-3.5" /> {pending ? "Enabling…" : "Enable on this device"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={fireTestAlarm}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-bold text-ink-700 hover:bg-ink-50"
+            >
+              <Volume2 className="h-3.5 w-3.5" /> Test alarm sound
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

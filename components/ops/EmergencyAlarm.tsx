@@ -145,6 +145,27 @@ export function EmergencyAlarm() {
     };
   }, [startSiren, stopSiren]);
 
+  // Manual test (from the AlertsStatus "Test alarm" button). The triggering
+  // click is a user gesture, so this also unlocks browser audio.
+  useEffect(() => {
+    const onTest = () => {
+      setActive({
+        id: "test",
+        title: "Test alarm",
+        body: "This is what an accident alert looks and sounds like.",
+        accident_id: null,
+      });
+      try {
+        navigator.vibrate?.([400, 200, 400, 200, 600]);
+      } catch {
+        /* unsupported */
+      }
+      startSiren();
+    };
+    window.addEventListener("prumac:test-alarm", onTest);
+    return () => window.removeEventListener("prumac:test-alarm", onTest);
+  }, [startSiren]);
+
   if (!active) return null;
 
   const href = active.accident_id ? `/accidents/${active.accident_id}` : "/accidents";

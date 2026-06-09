@@ -14,6 +14,7 @@ import {
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/ops/StatCard";
+import { AlertsStatus } from "@/components/ops/AlertsStatus";
 import { StatusDonut } from "@/components/ops/StatusDonut";
 import { FleetActivityChart } from "@/components/ops/FleetActivityChart";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
@@ -97,6 +98,9 @@ export default async function LiveOpsPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
+      {/* Emergency-alert enablement / test / status */}
+      <AlertsStatus />
+
       {/* Hero header */}
       <section className="relative rounded-3xl overflow-hidden">
         <div className="relative bg-gradient-to-br from-ink-950 via-ink-900 to-ink-800 px-8 py-8 lg:px-10 lg:py-10">
