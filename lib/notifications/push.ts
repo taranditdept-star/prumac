@@ -3,32 +3,40 @@ import webpush from "web-push";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
- * Web Push fan-out for emergency alerts.
- *
- * Sends a push notification to every active manager/admin device that has
- * opted in (rows in app.push_subscriptions). Runs server-side only; the
- * VAPID private key never reaches the browser. If VAPID keys are not
- * configured the calls become no-ops so the rest of the app keeps working.
+ * Web Push fan-out for emergency alerts. Server-side only — the VAPID private
+ * key never reaches the browser. Never throws, so callers can `await` it
+ * without risking the originating action.
  */
 
 let configured: boolean | null = null;
 
+/** web-push requires a `mailto:` or `https:` subject; tolerate a bare email. */
+function normalizeSubject(raw: string | undefined): string {
+  const s = (raw || "").trim();
+  if (/^(mailto:|https?:\/\/)/i.test(s)) return s;
+  if (s.includes("@")) return `mailto:${s}`;
+  return "mailto:admin@prumac.zw";
+}
+
 function ensureConfigured(): boolean {
   if (configured !== null) return configured;
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
   if (!publicKey || !privateKey) {
     console.warn("[push] VAPID keys not set — push notifications disabled.");
     configured = false;
     return false;
   }
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || "mailto:admin@prumac.zw",
-    publicKey,
-    privateKey,
-  );
-  configured = true;
-  return true;
+  try {
+    // setVapidDetails throws on a malformed subject or key — never let that
+    // bubble into the caller (it would break accident reporting).
+    webpush.setVapidDetails(normalizeSubject(process.env.VAPID_SUBJECT), publicKey, privateKey);
+    configured = true;
+  } catch (e) {
+    console.error("[push] invalid VAPID config:", (e as Error)?.message);
+    configured = false;
+  }
+  return configured;
 }
 
 export interface PushPayload {
@@ -40,6 +48,13 @@ export interface PushPayload {
   tag?: string;
 }
 
+export interface PushResult {
+  configured: boolean;
+  total: number;
+  sent: number;
+  failed: number;
+}
+
 interface SubRow {
   id: string;
   endpoint: string;
@@ -48,12 +63,16 @@ interface SubRow {
 }
 
 /**
- * Push to every active fleet_manager / admin. Best-effort: individual send
- * failures are swallowed, and subscriptions the push service reports as gone
- * (404/410) are pruned. Never throws — callers can `await` it without risk.
+ * Push to every active fleet_manager / admin. Returns a summary so callers can
+ * diagnose (configured? how many devices? how many sent/failed?). Dead
+ * subscriptions (404/410) are pruned.
  */
-export async function sendPushToManagers(payload: PushPayload): Promise<void> {
-  if (!ensureConfigured()) return;
+export async function sendPushToManagers(payload: PushPayload): Promise<PushResult> {
+  if (!ensureConfigured()) return { configured: false, total: 0, sent: 0, failed: 0 };
+
+  let total = 0;
+  let sent = 0;
+  let failed = 0;
 
   try {
     const sb = createServiceClient();
@@ -65,7 +84,7 @@ export async function sendPushToManagers(payload: PushPayload): Promise<void> {
       .in("role", ["fleet_manager", "admin"])
       .eq("is_active", true)
       .returns<{ id: string }[]>();
-    if (!managers || managers.length === 0) return;
+    if (!managers || managers.length === 0) return { configured: true, total: 0, sent: 0, failed: 0 };
 
     const { data: subs } = await sb
       .schema("app")
@@ -76,8 +95,9 @@ export async function sendPushToManagers(payload: PushPayload): Promise<void> {
         managers.map((m) => m.id),
       )
       .returns<SubRow[]>();
-    if (!subs || subs.length === 0) return;
+    if (!subs || subs.length === 0) return { configured: true, total: 0, sent: 0, failed: 0 };
 
+    total = subs.length;
     const body = JSON.stringify(payload);
 
     await Promise.all(
@@ -87,19 +107,21 @@ export async function sendPushToManagers(payload: PushPayload): Promise<void> {
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             body,
           );
+          sent++;
         } catch (err) {
+          failed++;
           const status = (err as { statusCode?: number })?.statusCode;
           if (status === 404 || status === 410) {
-            // Subscription expired / unsubscribed — remove it.
             await sb.schema("app").from("push_subscriptions").delete().eq("id", s.id);
           } else {
-            console.error("[push] send failed", status ?? err);
+            console.error("[push] send failed", status ?? (err as Error)?.message);
           }
         }
       }),
     );
   } catch (err) {
-    // Never let alerting break the originating action.
     console.error("[push] fan-out error", err);
   }
+
+  return { configured: true, total, sent, failed };
 }

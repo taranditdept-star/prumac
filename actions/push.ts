@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireAuth } from "@/lib/auth/session";
+import { requireAuth, requireRole } from "@/lib/auth/session";
+import { sendPushToManagers, type PushResult } from "@/lib/notifications/push";
 
 export type ActionResult = { error: string } | { success: true };
 
@@ -51,6 +52,21 @@ export async function savePushSubscription(sub: {
 export async function pushServerReady(): Promise<boolean> {
   await requireAuth();
   return Boolean(process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+}
+
+/**
+ * Fire a real push from the SERVER to all manager/admin devices — the exact
+ * path a reported accident uses. Returns a summary so the dashboard can show
+ * whether the live server can actually deliver (configured? devices? sent?).
+ */
+export async function sendTestPush(): Promise<PushResult> {
+  await requireRole("fleet_manager", "admin");
+  return sendPushToManagers({
+    title: "🚨 PRUMAC server test",
+    body: "If you see this, the live server can send accident alerts.",
+    url: "/live",
+    tag: "prumac-server-test",
+  });
 }
 
 /** Remove a subscription (e.g. the user disabled notifications). */
