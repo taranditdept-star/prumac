@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, X, Loader2, AlertCircle, RotateCw } from "lucide-react";
+import { Camera, ImagePlus, X, Loader2, RotateCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, makeThumbDataUrl } from "@/lib/image/compress";
+import { CameraCapture } from "@/components/primitives/CameraCapture";
 
 const BUCKET = "photos";
 
@@ -37,6 +38,7 @@ interface PhotoUploaderProps {
  */
 export function PhotoUploader({ folder, onPathsChange, persistKey, label = "photos" }: PhotoUploaderProps) {
   const [items, setItems] = useState<Item[]>([]);
+  const [showCamera, setShowCamera] = useState(false);
   const camRef = useRef<HTMLInputElement>(null);
   const galRef = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
@@ -194,7 +196,7 @@ export function PhotoUploader({ folder, onPathsChange, persistKey, label = "phot
       <div className="grid grid-cols-2 gap-2.5">
         <button
           type="button"
-          onClick={() => camRef.current?.click()}
+          onClick={() => setShowCamera(true)}
           className="inline-flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border border-ink-200 bg-white text-sm font-semibold text-ink-700 transition-all active:scale-[0.98]"
         >
           <Camera className="h-5 w-5" /> <span className="text-[11px]">Take photo</span>
@@ -223,6 +225,19 @@ export function PhotoUploader({ folder, onPathsChange, persistKey, label = "phot
           </>
         )}
       </p>
+
+      {showCamera && (
+        <CameraCapture
+          onCapture={(file) => void add([file])}
+          onClose={() => setShowCamera(false)}
+          onUnavailable={() => {
+            // No in-page camera (permission denied / unsupported) — fall back
+            // to the system camera file input.
+            setShowCamera(false);
+            camRef.current?.click();
+          }}
+        />
+      )}
     </div>
   );
 }
