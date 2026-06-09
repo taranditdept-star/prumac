@@ -3,6 +3,7 @@ import { getUnresolvedAlertCount } from "@/lib/ops/alert-count";
 import { BillingNav } from "@/components/billing/BillingNav";
 import { OpsSidebar } from "@/components/ops/OpsSidebar";
 import { OpsTopBar } from "@/components/ops/OpsTopBar";
+import { ManagerAlerting } from "@/components/ops/ManagerAlerting";
 
 export default async function BillingLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireRole("subsidiary_billing", "fleet_manager", "admin");
@@ -19,6 +20,7 @@ export default async function BillingLayout({ children }: { children: React.Reac
         <OpsTopBar profile={profile} alertCount={count} />
         <main className="flex-1">{children}</main>
       </div>
+      <ManagerAlerting />
     </div>
   );
 }

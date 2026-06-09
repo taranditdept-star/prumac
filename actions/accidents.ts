@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
 import { accidentCreateSchema, accidentStatusSchema } from "@/lib/validation/accident";
+import { sendPushToManagers } from "@/lib/notifications/push";
 
 export type ActionResult<T = void> =
   | { error: string }
@@ -95,6 +96,23 @@ export async function reportAccident(formData: FormData): Promise<ActionResult<{
   // Alert is raised automatically by the accidents_raise_alert trigger
   // (app.fn_alert_on_accident, SECURITY DEFINER) — do not insert here too,
   // or every accident would produce a duplicate alert.
+
+  // Emergency fan-out: ring every manager/admin device via Web Push so an
+  // accident is seen instantly even with the app closed. Best-effort — the
+  // sender never throws, so it can't block the driver's report.
+  const { data: veh } = await supabase
+    .schema("app")
+    .from("vehicles")
+    .select("plate_number")
+    .eq("id", parsed.data.vehicle_id)
+    .maybeSingle<{ plate_number: string }>();
+  const plate = veh?.plate_number ? ` · ${veh.plate_number}` : "";
+  await sendPushToManagers({
+    title: `🚨 ${parsed.data.severity} accident reported`,
+    body: `${profile.full_name ?? "A driver"}${plate} — ${parsed.data.location_description}`,
+    url: `/accidents/${data.id}`,
+    tag: `accident-${data.id}`,
+  });
 
   revalidatePath("/accidents");
   revalidatePath("/home");

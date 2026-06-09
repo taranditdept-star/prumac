@@ -3,6 +3,7 @@ import { getUnresolvedAlertCount } from "@/lib/ops/alert-count";
 import { OpsNav } from "@/components/ops/OpsNav";
 import { OpsSidebar } from "@/components/ops/OpsSidebar";
 import { OpsTopBar } from "@/components/ops/OpsTopBar";
+import { ManagerAlerting } from "@/components/ops/ManagerAlerting";
 
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireRole("fleet_manager", "admin");
@@ -19,6 +20,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         <OpsTopBar profile={profile} alertCount={count} />
         <main className="flex-1">{children}</main>
       </div>
+      <ManagerAlerting />
     </div>
   );
 }
