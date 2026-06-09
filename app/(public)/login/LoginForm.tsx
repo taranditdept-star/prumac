@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signInWithEmail } from "@/actions/auth";
 import { signInWithEmailForm } from "@/actions/auth-form";
-import { Logo, BrandMark } from "@/components/brand/Logo";
 
 const inputClass =
   "h-14 w-full rounded-2xl border border-ink-200 bg-ink-50/40 px-4 text-base text-ink-900 placeholder:text-ink-400 transition-all focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/15";
@@ -47,44 +47,53 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-indigo-950/15 ring-1 ring-ink-200/60 lg:grid lg:max-w-5xl lg:grid-cols-2">
       {/* ───────── Left: brand hero (desktop) ───────── */}
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-[#181c4a] via-indigo-700 to-violet-600 p-10 lg:flex lg:flex-col lg:justify-between">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-orange-500/35 blur-3xl" />
-        <div className="pointer-events-none absolute -left-12 bottom-0 h-72 w-72 rounded-full bg-sky-400/25 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 bg-grid opacity-20" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+      <div className="relative hidden overflow-hidden bg-gradient-to-br from-[#161a45] via-indigo-700 to-violet-600 p-12 lg:flex lg:flex-col lg:justify-between">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-80 w-80 rounded-full bg-orange-500/35 blur-3xl" />
+        <div className="pointer-events-none absolute -left-16 bottom-0 h-80 w-80 rounded-full bg-sky-400/25 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.15]" />
 
-        <span className="relative text-[11px] font-bold uppercase tracking-[0.22em] text-white/70">
+        <span className="relative text-[11px] font-bold uppercase tracking-[0.24em] text-white/70">
           PRUMAC Connect
         </span>
 
-        {/* Large brand plate — the hero visual */}
+        {/* Crisp brand tile (512px source — sharp at this size) */}
         <div className="relative flex flex-1 items-center justify-center py-10">
-          <div className="rounded-[2.25rem] bg-white px-14 py-12 shadow-2xl shadow-black/40 ring-1 ring-white/40">
-            <Logo height={88} />
+          <div className="relative">
+            <div className="absolute -inset-8 rounded-[3rem] bg-white/10 blur-2xl" />
+            <Image
+              src="/icons/icon-512.png"
+              alt="PRUMAC Connect"
+              width={512}
+              height={512}
+              priority
+              className="relative h-52 w-52 rounded-[2.25rem] shadow-2xl shadow-black/40 ring-1 ring-white/40"
+            />
           </div>
         </div>
 
         <div className="relative">
-          <h2 className="text-2xl font-extrabold leading-tight text-white">
+          <h2 className="text-[28px] font-extrabold leading-tight text-white">
             Run your fleet with confidence.
           </h2>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/70">
+          <p className="mt-2.5 max-w-sm text-sm leading-relaxed text-white/70">
             Live tracking, trips, maintenance, billing and safety — unified for the entire Ensign fleet.
           </p>
-          <p className="mt-6 text-[11px] text-white/45">© 2026 Ensign Holdings · PRUMAC Fleet</p>
+          <p className="mt-7 text-[11px] text-white/45">© 2026 Ensign Holdings · PRUMAC Fleet</p>
         </div>
       </div>
 
       {/* ───────── Right: sign-in form ───────── */}
       <div className="p-8 sm:p-10 lg:p-12">
-        {/* Mobile logo (left panel is hidden on small screens) */}
+        {/* Mobile brand tile (left panel hidden on small screens) */}
         <div className="mb-8 flex justify-center lg:hidden">
-          <Logo height={52} />
-        </div>
-
-        {/* Small brand mark (desktop) */}
-        <div className="mb-6 hidden lg:block">
-          <BrandMark className="h-9 w-9" />
+          <Image
+            src="/icons/icon-512.png"
+            alt="PRUMAC Connect"
+            width={512}
+            height={512}
+            priority
+            className="h-20 w-20 rounded-2xl shadow-md ring-1 ring-ink-200/70"
+          />
         </div>
 
         <h1 className="text-3xl font-extrabold tracking-tight text-ink-900">Welcome back</h1>
