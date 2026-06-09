@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertOctagon, Send, MapPin } from "lucide-react";
 import { reportAccident } from "@/actions/accidents";
-import { PhotoInput } from "@/components/primitives/PhotoInput";
+import { PhotoUploader } from "@/components/primitives/PhotoUploader";
 import { FormSection, FieldLabel, fieldClass, textareaClass, SubmitButton } from "@/components/driver/FormKit";
 import type { CountryCode } from "@/types/domain";
 
@@ -30,6 +30,8 @@ const SEVERITIES = [
   { value: "fatal", label: "Fatal", desc: "Fatality involved", color: "crimson" },
 ] as const;
 
+type Severity = (typeof SEVERITIES)[number]["value"];
+
 const colorMap = {
   sky: { bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-700" },
   amber: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" },
@@ -37,13 +39,55 @@ const colorMap = {
   crimson: { bg: "bg-rose-100", border: "border-rose-400", text: "text-rose-800" },
 };
 
+const DRAFT_KEY = "accident-draft";
+const PHOTOS_KEY = "accident-photos";
+
+function readDraft(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [severity, setSeverity] = useState<"minor" | "moderate" | "severe" | "fatal">("moderate");
-  const [otherParties, setOtherParties] = useState(false);
-  const [injuries, setInjuries] = useState(false);
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Read any draft saved before a tab reload — once, synchronously.
+  const draft = useRef(readDraft()).current;
+
+  const [severity, setSeverity] = useState<Severity>(
+    (SEVERITIES.find((s) => s.value === draft.severity)?.value ?? "moderate") as Severity,
+  );
+  const [otherParties, setOtherParties] = useState(draft.other_parties_involved === "1");
+  const [injuries, setInjuries] = useState(draft.injuries === "1");
+  const [photoPaths, setPhotoPaths] = useState<string[]>([]);
+
+  // Persist every field so an Android tab-discard (common while the camera is
+  // open) never loses what's been typed.
+  function saveDraft() {
+    if (!formRef.current) return;
+    const fd = new FormData(formRef.current);
+    const next: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) if (typeof v === "string") next[k] = v;
+    next.severity = severity;
+    next.other_parties_involved = otherParties ? "1" : "";
+    next.injuries = injuries ? "1" : "";
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+    } catch {
+      /* quota — fields still held in the live DOM */
+    }
+  }
+
+  // Re-save when the toggle/severity state changes (text inputs save on input).
+  useEffect(() => {
+    saveDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [severity, otherParties, injuries]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,11 +98,15 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
     fd.set("severity", severity);
     fd.set("other_parties_involved", otherParties ? "true" : "false");
     fd.set("injuries", injuries ? "true" : "false");
-    photoFiles.forEach((f) => fd.append("photos", f));
+    photoPaths.forEach((p) => fd.append("photo_paths", p));
 
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { fd.set("lat", String(pos.coords.latitude)); fd.set("lng", String(pos.coords.longitude)); submit(fd); },
+        (pos) => {
+          fd.set("lat", String(pos.coords.latitude));
+          fd.set("lng", String(pos.coords.longitude));
+          submit(fd);
+        },
         () => submit(fd),
         { timeout: 3000 },
       );
@@ -73,7 +121,8 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
         const result = await reportAccident(fd);
         if (result && "error" in result) toast.error(result.error);
         else if (result && "redirectTo" in result) {
-          sessionStorage.removeItem("accident-photos");
+          sessionStorage.removeItem(PHOTOS_KEY);
+          sessionStorage.removeItem(DRAFT_KEY);
           toast.success("Accident reported. Fleet team has been notified.");
           router.push(result.redirectTo);
           router.refresh();
@@ -85,7 +134,7 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form ref={formRef} onSubmit={handleSubmit} onInput={saveDraft} className="space-y-4">
       {/* 1 · Severity */}
       <FormSection step={1} title="How serious is it?">
         <div className="grid grid-cols-2 gap-2.5">
@@ -114,18 +163,36 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
         <div className="grid grid-cols-2 gap-3">
           <div>
             <FieldLabel required>When</FieldLabel>
-            <input name="occurred_at" type="datetime-local" defaultValue={new Date().toISOString().slice(0, 16)} className={fieldClass} required />
+            <input
+              name="occurred_at"
+              type="datetime-local"
+              defaultValue={draft.occurred_at || new Date().toISOString().slice(0, 16)}
+              className={fieldClass}
+              required
+            />
           </div>
           <div>
             <FieldLabel>Odometer</FieldLabel>
-            <input name="odometer_km" type="number" min={0} defaultValue={vehicle.current_odometer_km} className={`${fieldClass} font-plate`} />
+            <input
+              name="odometer_km"
+              type="number"
+              min={0}
+              defaultValue={draft.odometer_km || vehicle.current_odometer_km}
+              className={`${fieldClass} font-plate`}
+            />
           </div>
         </div>
         <div>
           <FieldLabel required>Where did it happen?</FieldLabel>
           <div className="relative">
             <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-            <input name="location_description" placeholder="A1 north of Bulawayo, ~5km from Gwanda turn-off" className={`${fieldClass} pl-10`} required />
+            <input
+              name="location_description"
+              defaultValue={draft.location_description}
+              placeholder="A1 north of Bulawayo, ~5km from Gwanda turn-off"
+              className={`${fieldClass} pl-10`}
+              required
+            />
           </div>
         </div>
       </FormSection>
@@ -135,21 +202,33 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
         <div className="grid grid-cols-2 gap-3">
           <div>
             <FieldLabel>Weather</FieldLabel>
-            <input name="weather" placeholder="Clear / Rain" className={fieldClass} />
+            <input name="weather" defaultValue={draft.weather} placeholder="Clear / Rain" className={fieldClass} />
           </div>
           <div>
             <FieldLabel>Road</FieldLabel>
-            <input name="road_conditions" placeholder="Dry / Wet" className={fieldClass} />
+            <input name="road_conditions" defaultValue={draft.road_conditions} placeholder="Dry / Wet" className={fieldClass} />
           </div>
         </div>
         <div className="space-y-3 rounded-2xl bg-ink-50 p-3.5">
           <ToggleRow label="Other vehicles or people involved?" checked={otherParties} onChange={setOtherParties} />
           {otherParties && (
-            <textarea name="third_party_details" rows={3} placeholder="Names, phone numbers, plates, insurer…" className={textareaClass} />
+            <textarea
+              name="third_party_details"
+              rows={3}
+              defaultValue={draft.third_party_details}
+              placeholder="Names, phone numbers, plates, insurer…"
+              className={textareaClass}
+            />
           )}
           <ToggleRow label="Were there any injuries?" checked={injuries} onChange={setInjuries} />
           {injuries && (
-            <textarea name="injuries_details" rows={3} placeholder="Who was injured, where they were taken" className={textareaClass} />
+            <textarea
+              name="injuries_details"
+              rows={3}
+              defaultValue={draft.injuries_details}
+              placeholder="Who was injured, where they were taken"
+              className={textareaClass}
+            />
           )}
         </div>
       </FormSection>
@@ -158,23 +237,30 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
       <FormSection step={4} title="Your statement">
         <div>
           <FieldLabel required>What happened?</FieldLabel>
-          <textarea name="description" rows={4} placeholder="Describe the sequence of events" className={textareaClass} required />
+          <textarea
+            name="description"
+            rows={4}
+            defaultValue={draft.description}
+            placeholder="Describe the sequence of events"
+            className={textareaClass}
+            required
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <FieldLabel>Police case #</FieldLabel>
-            <input name="police_report_number" placeholder="If filed" className={`${fieldClass} font-plate`} />
+            <input name="police_report_number" defaultValue={draft.police_report_number} placeholder="If filed" className={`${fieldClass} font-plate`} />
           </div>
           <div>
             <FieldLabel>Police station</FieldLabel>
-            <input name="police_station" placeholder="If filed" className={fieldClass} />
+            <input name="police_station" defaultValue={draft.police_station} placeholder="If filed" className={fieldClass} />
           </div>
         </div>
       </FormSection>
 
       {/* 5 · Photos */}
-      <FormSection step={5} title="Scene photos" hint="Photograph the damage and scene from a few angles.">
-        <PhotoInput name="photos" max={10} label="scene" onFilesChange={setPhotoFiles} persistKey="accident-photos" />
+      <FormSection step={5} title="Scene photos" hint="Add as many as you like — photograph the damage and scene from several angles. Each uploads as you add it, so they're safe even if the page reloads.">
+        <PhotoUploader folder="accident" onPathsChange={setPhotoPaths} persistKey={PHOTOS_KEY} label="scene" />
       </FormSection>
 
       <SubmitButton tone="rose" disabled={isPending} icon={<Send className="h-5 w-5" />}>

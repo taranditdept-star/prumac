@@ -28,7 +28,8 @@ export function EmergencyAlarm() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const stopSirenRef = useRef<(() => void) | null>(null);
 
-  // Prime audio on first interaction so the siren can play later.
+  // Prime audio on first interaction so the siren can play later. Browsers
+  // unlock audio only inside a user-gesture handler, so we listen broadly.
   useEffect(() => {
     const prime = () => {
       if (!audioCtxRef.current) {
@@ -43,15 +44,26 @@ export function EmergencyAlarm() {
       }
       audioCtxRef.current?.resume().catch(() => {});
     };
-    window.addEventListener("pointerdown", prime);
-    window.addEventListener("keydown", prime);
+    const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart", "click"];
+    for (const ev of events) window.addEventListener(ev, prime);
     return () => {
-      window.removeEventListener("pointerdown", prime);
-      window.removeEventListener("keydown", prime);
+      for (const ev of events) window.removeEventListener(ev, prime);
     };
   }, []);
 
   const startSiren = useCallback(() => {
+    // Create the context lazily if the manager hasn't interacted yet (may be
+    // suspended until a gesture, but worth attempting).
+    if (!audioCtxRef.current) {
+      try {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctx) audioCtxRef.current = new Ctx();
+      } catch {
+        /* no audio */
+      }
+    }
     const ctx = audioCtxRef.current;
     if (!ctx) return;
     ctx.resume().catch(() => {});

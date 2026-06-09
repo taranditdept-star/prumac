@@ -27,6 +27,19 @@ export function dataUrlToFile(dataUrl: string, name: string): File {
   return new File([arr], name, { type: mime });
 }
 
+/**
+ * Small data-URL thumbnail (for previews persisted in sessionStorage — keeps
+ * the quota tiny even with many high-res photos). Returns "" on failure.
+ */
+export async function makeThumbDataUrl(file: File, maxDim = 320, quality = 0.6): Promise<string> {
+  try {
+    const small = await compressImage(file, maxDim, quality);
+    return await fileToDataUrl(small);
+  } catch {
+    return "";
+  }
+}
+
 export async function compressImage(file: File, maxDim = 1600, quality = 0.72): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
   try {

@@ -74,23 +74,17 @@ export async function reportAccident(formData: FormData): Promise<ActionResult<{
 
   if (error) return { error: error.message };
 
-  // Scene photos — compressed client-side, uploaded server-side via the service
-  // client (bypasses Storage RLS), then linked to the accident.
-  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length > 0) {
+  // Scene photos are uploaded directly to Storage from the browser (no body
+  // limit, any number, full quality) — here we just link the resulting paths.
+  const paths = formData
+    .getAll("photo_paths")
+    .filter((p): p is string => typeof p === "string" && p.length > 0);
+  if (paths.length > 0) {
     const service = createServiceClient();
-    for (const file of files) {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const path = `accident/${data.id}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await service.storage
-        .from("photos")
-        .upload(path, file, { upsert: false, contentType: file.type || "image/jpeg" });
-      if (upErr) continue; // best effort — never block the report on a photo
-      await service
-        .schema("app")
-        .from("accident_photos")
-        .insert({ accident_id: data.id, file_path: path });
-    }
+    await service
+      .schema("app")
+      .from("accident_photos")
+      .insert(paths.map((p) => ({ accident_id: data.id, file_path: p })));
   }
 
   // Alert is raised automatically by the accidents_raise_alert trigger
