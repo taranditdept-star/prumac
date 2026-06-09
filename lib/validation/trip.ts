@@ -21,6 +21,7 @@ export const tripEndSchema = z.object({
   end_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
   fuel_litres: z.coerce.number().min(0).max(2000).optional().nullable(),
   fuel_amount: z.coerce.number().min(0).max(100000).optional().nullable(),
+  load_count: z.coerce.number().int().min(0).max(1000).optional().nullable(),
 });
 
 export const tripCancelSchema = z.object({

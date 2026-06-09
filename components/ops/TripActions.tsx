@@ -165,6 +165,12 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
               <Input name="fuel_amount" type="number" step="0.01" min={0} className="mt-1 font-plate" />
             </div>
           </div>
+          <div>
+            <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
+              Loads carried
+            </Label>
+            <Input name="load_count" type="number" step="1" min={0} placeholder="For grabber / per-load billing" className="mt-1 font-plate" />
+          </div>
           <div className="flex gap-2">
             <Button
               type="submit"

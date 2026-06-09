@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
+import { SignOutButton } from "@/components/driver/SignOutButton";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -207,6 +208,7 @@ export default async function DriverHomePage() {
         <div className="grid grid-cols-2 gap-3">
           <ActionCard href="/scorecard" icon={Award} tone="emerald" title="My scorecard" subtitle="Safety rating" />
           <ActionCard href="/leave" icon={CalendarDays} tone="sky" title="My leave" subtitle="Request time off" />
+          <SignOutButton />
         </div>
       </section>
 

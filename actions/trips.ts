@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
+import { getOdometerJumpThreshold } from "@/lib/settings";
 import {
   tripStartSchema,
   tripEndSchema,
@@ -18,8 +19,8 @@ export type ActionResult<T = void> =
 
 // A start odometer above the last known reading by more than this many km is
 // treated as an implausible jump worth flagging (legitimate gaps from other
-// drivers' trips are usually far smaller).
-const ODOMETER_JUMP_THRESHOLD_KM = 1500;
+// drivers' trips are usually far smaller). The threshold is admin-configurable
+// via Settings (app_settings) — see getOdometerJumpThreshold().
 
 // ───────────────────────────────────────────────────────────────────────────
 // START trip — driver picks vehicle, captures odometer, begins
@@ -152,7 +153,7 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     const entered = parsed.data.start_odometer_km;
     const delta = entered - lastKnown;
     const isRollback = delta < 0;
-    const isJump = delta > ODOMETER_JUMP_THRESHOLD_KM;
+    const isJump = delta > (await getOdometerJumpThreshold());
     if (isRollback || isJump) {
       await service.schema("app").from("alerts").insert({
         kind: "odometer_mismatch",
@@ -235,6 +236,7 @@ export async function endTrip(formData: FormData): Promise<ActionResult> {
     end_odometer_km: formData.get("end_odometer_km"),
     fuel_litres: formData.get("fuel_litres") || null,
     fuel_amount: formData.get("fuel_amount") || null,
+    load_count: formData.get("load_count") || null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -263,6 +265,7 @@ export async function endTrip(formData: FormData): Promise<ActionResult> {
       end_odometer_km: parsed.data.end_odometer_km,
       fuel_litres: parsed.data.fuel_litres ?? null,
       fuel_amount: parsed.data.fuel_amount ?? null,
+      load_count: parsed.data.load_count ?? null,
     })
     .eq("id", parsed.data.trip_id);
 

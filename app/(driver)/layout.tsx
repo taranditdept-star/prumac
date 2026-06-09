@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { DriverBottomTabs } from "@/components/driver/BottomTabs";
@@ -46,6 +47,13 @@ export default async function DriverLayout({ children }: { children: React.React
     .select("id, licence_number, licence_country")
     .eq("profile_id", profile.id)
     .maybeSingle<{ id: string; licence_number: string; licence_country: string }>();
+
+  // First-login gate: import-created drivers (licence_number = 'IMPORT-PENDING')
+  // must complete their profile before using the app. Read fresh from `drivers`
+  // (not the cached profile) so it clears immediately after onboarding.
+  if (driver && driver.licence_number === "IMPORT-PENDING") {
+    redirect("/onboarding");
+  }
 
   // Is the driver mid-trip? The centre action becomes "Manage trip" if so.
   let activeTripId: string | null = null;

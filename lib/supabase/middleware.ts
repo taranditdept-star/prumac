@@ -42,7 +42,10 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     pathname.startsWith("/login") ||
     pathname.startsWith("/reset-password") ||
-    pathname.startsWith("/api/health");
+    pathname.startsWith("/api/health") ||
+    // Cron routes authenticate themselves with CRON_SECRET (Bearer token from
+    // Vercel Cron); they have no Supabase session, so skip the redirect.
+    pathname.startsWith("/api/cron");
 
   if (DEBUG && !pathname.startsWith("/_next") && !pathname.startsWith("/favicon")) {
     const sbCookies = request.cookies
