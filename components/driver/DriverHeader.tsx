@@ -71,17 +71,32 @@ export function DriverHeader({
             </div>
           </button>
 
-          {/* Bell */}
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="relative h-11 w-11 rounded-2xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-700 active:scale-95 transition-all"
-          >
-            <Bell className="h-5 w-5" />
-            {alertCount > 0 && (
-              <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
-            )}
-          </button>
+          {/* Right-side actions */}
+          <div className="flex items-center gap-2">
+            {/* Bell */}
+            <button
+              type="button"
+              aria-label="Notifications"
+              className="relative h-11 w-11 rounded-2xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-700 active:scale-95 transition-all"
+            >
+              <Bell className="h-5 w-5" />
+              {alertCount > 0 && (
+                <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
+              )}
+            </button>
+
+            {/* Sign out */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isPending}
+              aria-label="Sign out"
+              title="Sign out"
+              className="h-11 w-11 rounded-2xl bg-rose-50 hover:bg-rose-100 flex items-center justify-center text-rose-600 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
