@@ -101,26 +101,47 @@ export default async function TripsPage({
     .order("created_at", { ascending: false })
     .limit(LIST_LIMIT);
 
-  // Everything in ONE parallel wave: filter options, status breakdown, list.
-  const [{ data: vehiclesOpt }, { data: minRow }, { data: maxRow }, { data: statusRows }, listRes] =
-    await Promise.all([
-      supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
-      supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: true }).limit(1).maybeSingle<{ started_at: string }>(),
-      supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle<{ started_at: string }>(),
-      applyFilters(supabase.schema("app").from("trips").select("status")).limit(20000),
-      listQ,
-    ]);
+  // Status breakdown via COUNT(head:true) queries: each returns just a number,
+  // not the rows, so the page never transfers thousands of trip rows merely to
+  // tally them — and it stays fast as the table grows. The four tiles always
+  // show the full breakdown (ignoring any status filter); `total` honours it.
+  const headCount = () =>
+    applyFilters(supabase.schema("app").from("trips").select("*", { count: "exact", head: true }));
+  let totalQ = headCount();
+  if (statusFilter) totalQ = totalQ.eq("status", statusFilter);
+
+  // Everything in ONE parallel wave: filter options, status counts, list.
+  const [
+    { data: vehiclesOpt },
+    { data: minRow },
+    { data: maxRow },
+    { count: totalCnt },
+    { count: activeCnt },
+    { count: awaitingCnt },
+    { count: completedCnt },
+    { count: cancelledCnt },
+    listRes,
+  ] = await Promise.all([
+    supabase.schema("app").from("vehicles").select("id, plate_number, make, model").order("plate_number"),
+    supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: true }).limit(1).maybeSingle<{ started_at: string }>(),
+    supabase.schema("app").from("trips").select("started_at").not("started_at", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle<{ started_at: string }>(),
+    totalQ,
+    headCount().in("status", ["in_progress", "paused"]),
+    headCount().eq("status", "ended"),
+    headCount().eq("status", "completed"),
+    headCount().eq("status", "cancelled"),
+    listQ,
+  ]);
 
   const months = monthsBetween(minRow?.started_at ?? null, maxRow?.started_at ?? null);
-  const statuses = (statusRows ?? []) as { status: string }[];
-  const active = statuses.filter((s) => s.status === "in_progress" || s.status === "paused").length;
-  const awaiting = statuses.filter((s) => s.status === "ended").length;
-  const completed = statuses.filter((s) => s.status === "completed").length;
-  const cancelled = statuses.filter((s) => s.status === "cancelled").length;
+  const active = activeCnt ?? 0;
+  const awaiting = awaitingCnt ?? 0;
+  const completed = completedCnt ?? 0;
+  const cancelled = cancelledCnt ?? 0;
 
   const { data: trips, error } = listRes as { data: TripListRow[] | null; error: { message: string } | null };
-  // Total matching the current filters (incl. status) — from the status fetch.
-  const total = statusFilter ? statuses.filter((s) => s.status === statusFilter).length : statuses.length;
+  // Total matching the current filters (incl. any status filter).
+  const total = totalCnt ?? 0;
 
   if (error) {
     return (

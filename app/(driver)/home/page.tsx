@@ -56,13 +56,6 @@ export default async function DriverHomePage() {
   const profile = await requireAuth();
   const supabase = await createClient();
 
-  const { data: driver } = await supabase
-    .schema("app")
-    .from("drivers")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .maybeSingle<{ id: string }>();
-
   let activeTrip: ActiveTrip | null = null;
   let assignment: AssignmentInfo | null = null;
   let assignedCount = 0;
@@ -70,8 +63,20 @@ export default async function DriverHomePage() {
   let stats = { trips: 0, totalKm: 0 };
   let pendingTakeovers = 0;
 
+  // The driver row and the incoming-handover list are independent, so fetch
+  // them in one parallel wave (one round-trip instead of two). This is the
+  // driver's landing page, so the saved round-trip is felt on every login.
+  const [{ data: driver }, { data: handovers }] = await Promise.all([
+    supabase
+      .schema("app")
+      .from("drivers")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .maybeSingle<{ id: string }>(),
+    supabase.schema("app").rpc("fn_my_handovers"),
+  ]);
+
   // Incoming handovers awaiting this driver's confirmation
-  const { data: handovers } = await supabase.schema("app").rpc("fn_my_handovers");
   if (Array.isArray(handovers)) {
     pendingTakeovers = handovers.filter(
       (h: { direction: string; status: string }) => h.direction === "incoming" && h.status === "pending",

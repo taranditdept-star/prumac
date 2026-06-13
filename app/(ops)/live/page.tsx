@@ -25,6 +25,13 @@ import type { VehicleRow, DocumentRow } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
+function greetingFor(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 // Synthetic week activity sparkline data for demo (Phase 5 wires real data)
 const weekData = [
   { day: "Mon", trips: 24, km: 1820 },
@@ -119,7 +126,7 @@ export default async function LiveOpsPage() {
                 <span className="text-xs font-medium text-white">Live</span>
               </div>
               <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-tight">
-                Good evening, {firstName}
+                {greetingFor()}, {firstName}
               </h1>
               <p className="mt-2 text-sm text-slate-300 max-w-lg">
                 Your fleet of <span className="font-semibold text-white">{active.length} vehicles</span> is
