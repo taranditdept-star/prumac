@@ -13,7 +13,7 @@ export default async function LiveMapPage() {
   const supabase = await createClient();
 
   const [posRes, alertRes] = await Promise.all([
-    supabase.schema("app").rpc("fn_live_fleet_positions"),
+    supabase.schema("app").rpc("fn_live_driver_positions"),
     supabase
       .schema("app")
       .from("alerts")

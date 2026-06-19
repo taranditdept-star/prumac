@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { DriverBottomTabs } from "@/components/driver/BottomTabs";
 import { DriverHeader } from "@/components/driver/DriverHeader";
+import { LiveLocationProvider } from "@/components/driver/LiveLocationProvider";
+import { LocationPermissionBanner } from "@/components/driver/LocationPermissionBanner";
 
 const GRADIENTS = [
   "from-orange-400 to-pink-500",
@@ -71,22 +73,28 @@ export default async function DriverLayout({ children }: { children: React.React
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5f7fb]">
-      <DriverHeader
-        fullName={profile.full_name}
-        phone={profile.phone}
-        licenceNumber={driver?.licence_number}
-        licenceCountry={driver?.licence_country}
-        initial={initialOf(profile.full_name)}
-        gradient={gradientFor(profile.full_name)}
-        greeting={greetingFor()}
-      />
-      {/* Bottom padding clears the fixed nav (h-16) + safe area so content and
-          submit buttons are never hidden behind the bottom navigation. */}
-      <main className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        {children}
-      </main>
-      <DriverBottomTabs activeTripId={activeTripId} />
-    </div>
+    // LiveLocationProvider runs one GPS watch for the whole driver session, so
+    // the driver streams their position to head office from the moment they log
+    // in — on any screen, no "Manage trip" or "Sync now" needed.
+    <LiveLocationProvider>
+      <div className="min-h-screen flex flex-col bg-[#f5f7fb]">
+        <DriverHeader
+          fullName={profile.full_name}
+          phone={profile.phone}
+          licenceNumber={driver?.licence_number}
+          licenceCountry={driver?.licence_country}
+          initial={initialOf(profile.full_name)}
+          gradient={gradientFor(profile.full_name)}
+          greeting={greetingFor()}
+        />
+        <LocationPermissionBanner />
+        {/* Bottom padding clears the fixed nav (h-16) + safe area so content and
+            submit buttons are never hidden behind the bottom navigation. */}
+        <main className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))]">
+          {children}
+        </main>
+        <DriverBottomTabs activeTripId={activeTripId} />
+      </div>
+    </LiveLocationProvider>
   );
 }

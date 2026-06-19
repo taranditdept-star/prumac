@@ -7,14 +7,15 @@ import { createClient } from "@/lib/supabase/client";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export interface FleetPosition {
-  trip_id: string;
-  vehicle_id: string;
-  plate_number: string;
-  plate_country: CountryCode;
-  make: string;
-  model: string;
+  driver_id: string;
   driver_name: string | null;
-  trip_status: TripStatus;
+  vehicle_id: string | null;
+  plate_number: string | null;
+  plate_country: CountryCode | null;
+  make: string | null;
+  model: string | null;
+  trip_id: string | null;
+  trip_status: TripStatus | null;
   lat: number;
   lng: number;
   speed_kph: number | null;
@@ -27,19 +28,20 @@ interface FleetMapProps {
   initial: FleetPosition[];
   token: string | null;
   onSelect?: (p: FleetPosition | null) => void;
-  selectedTripId?: string | null;
+  selectedDriverId?: string | null;
 }
 
 const ZW_CENTER: [number, number] = [29.83, -19.02];
 
 function markerColor(p: FleetPosition): string {
-  if (p.trip_status === "paused") return "#f59e0b";
   if (p.seconds_old > 300) return "#ef4444";   // stale > 5 min
+  if (p.trip_status === "paused") return "#f59e0b";
   if (p.speed_kph != null && p.speed_kph > 5) return "#10b981"; // moving
-  return "#0ea5e9"; // idle
+  if (!p.trip_id) return "#8b5cf6"; // logged in, no active trip
+  return "#0ea5e9"; // idle (on a trip but stopped)
 }
 
-export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapProps) {
+export function FleetMap({ initial, token, onSelect, selectedDriverId }: FleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -104,10 +106,10 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
       const seen = new Set<string>();
 
       for (const p of pts) {
-        seen.add(p.trip_id);
+        seen.add(p.driver_id);
         const lngLat: [number, number] = [p.lng, p.lat];
-        if (existing.has(p.trip_id)) {
-          existing.get(p.trip_id)!.setLngLat(lngLat);
+        if (existing.has(p.driver_id)) {
+          existing.get(p.driver_id)!.setLngLat(lngLat);
         } else {
           const el = document.createElement("div");
           el.className = "fleet-marker";
@@ -126,11 +128,11 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
           const marker = new mapboxgl.Marker({ element: el })
             .setLngLat(lngLat)
             .addTo(map);
-          existing.set(p.trip_id, marker);
+          existing.set(p.driver_id, marker);
         }
 
         // Update colour on existing
-        const el = existing.get(p.trip_id)?.getElement();
+        const el = existing.get(p.driver_id)?.getElement();
         if (el) el.style.background = markerColor(p);
       }
 
@@ -161,9 +163,9 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
 
   // Highlight selected marker
   useEffect(() => {
-    markersRef.current.forEach((marker, tripId) => {
+    markersRef.current.forEach((marker, driverId) => {
       const el = marker.getElement();
-      if (tripId === selectedTripId) {
+      if (driverId === selectedDriverId) {
         el.style.transform = "scale(1.4)";
         el.style.boxShadow =
           "0 0 0 3px rgba(255,90,31,0.6), 0 0 20px rgba(255,90,31,0.4), 0 4px 12px rgba(0,0,0,0.4)";
@@ -172,26 +174,32 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
         el.style.boxShadow = "0 0 0 2px rgba(15,23,42,0.4), 0 4px 10px rgba(0,0,0,0.3)";
       }
     });
-  }, [selectedTripId]);
+  }, [selectedDriverId]);
 
-  // Realtime subscription — refresh position on new ping
+  // Realtime subscription — refresh positions whenever any driver's presence
+  // row is upserted (INSERT on first fix, UPDATE thereafter → event "*").
+  // Bursts (a whole fleet pinging at once) are coalesced into one refetch / 3s.
   useEffect(() => {
     const supabase = createClient();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refetch = () => {
+      if (timer) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        const { data } = await supabase.schema("app").rpc("fn_live_driver_positions");
+        if (Array.isArray(data)) setPositions(data as FleetPosition[]);
+      }, 3_000);
+    };
     const channel = supabase
-      .channel("fleet-positions")
+      .channel("driver-positions")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "app", table: "trip_locations" },
-        async () => {
-          // Re-fetch the snapshot for this trip via RPC for simplicity
-          const { data } = await supabase
-            .schema("app")
-            .rpc("fn_live_fleet_positions");
-          if (Array.isArray(data)) setPositions(data as FleetPosition[]);
-        },
+        { event: "*", schema: "app", table: "driver_presence" },
+        refetch,
       )
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -241,9 +249,9 @@ export function FleetMap({ initial, token, onSelect, selectedTripId }: FleetMapP
       {positions.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="rounded-2xl bg-ink-950/80 backdrop-blur px-5 py-4 border border-white/10 text-center">
-            <p className="text-sm font-semibold text-white">No vehicles moving right now</p>
+            <p className="text-sm font-semibold text-white">No drivers sharing location right now</p>
             <p className="text-xs text-slate-400 mt-1">
-              When a driver starts a trip, they&apos;ll appear here.
+              Drivers appear here the moment they log in and allow location.
             </p>
           </div>
         </div>

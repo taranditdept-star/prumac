@@ -38,7 +38,7 @@ export function LiveOpsCommandCenter({
   mapboxToken,
 }: LiveOpsCommandCenterProps) {
   const [positions, setPositions] = useState<FleetPosition[]>(initialPositions);
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
   // Refresh "seconds_old" view every 15s so cards drift through Moving → Idle → Stale
@@ -47,34 +47,43 @@ export function LiveOpsCommandCenter({
     return () => clearInterval(i);
   }, []);
 
-  // Subscribe to fleet positions
+  // Subscribe to live driver positions (presence is upserted → event "*").
+  // Coalesce a fleet-wide burst of pings into at most one refetch / 3s.
   useEffect(() => {
     const supabase = createClient();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refetch = () => {
+      if (timer) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        const { data } = await supabase.schema("app").rpc("fn_live_driver_positions");
+        if (Array.isArray(data)) setPositions(data as FleetPosition[]);
+      }, 3_000);
+    };
     const channel = supabase
-      .channel("fleet-positions-summary")
+      .channel("driver-positions-summary")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "app", table: "trip_locations" },
-        async () => {
-          const { data } = await supabase.schema("app").rpc("fn_live_fleet_positions");
-          if (Array.isArray(data)) setPositions(data as FleetPosition[]);
-        },
+        { event: "*", schema: "app", table: "driver_presence" },
+        refetch,
       )
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, []);
 
   const summary = {
     total: positions.length,
+    onTrip: positions.filter((p) => p.trip_id != null).length,
     moving: positions.filter((p) => statusOf(p) === "moving").length,
     idle: positions.filter((p) => statusOf(p) === "idle").length,
     stale: positions.filter((p) => statusOf(p) === "stale").length,
     paused: positions.filter((p) => statusOf(p) === "paused").length,
   };
 
-  const selected = positions.find((p) => p.trip_id === selectedTripId) ?? null;
+  const selected = positions.find((p) => p.driver_id === selectedDriverId) ?? null;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6">
@@ -89,9 +98,9 @@ export function LiveOpsCommandCenter({
             </span>
             <span className="text-xs font-bold uppercase tracking-[0.14em] text-ink-800">Live</span>
           </div>
-          <Pill icon={Radio} label="Active trips" value={summary.total} tone="brand" />
+          <Pill icon={Radio} label="Drivers live" value={summary.total} tone="brand" />
           <Pill icon={Activity} label="Moving" value={summary.moving} tone="emerald" />
-          <Pill icon={Gauge} label="Idle" value={summary.idle} tone="sky" />
+          <Pill icon={Gauge} label="On trip" value={summary.onTrip} tone="sky" />
           {summary.paused > 0 && (
             <Pill icon={Activity} label="Paused" value={summary.paused} tone="amber" />
           )}
@@ -104,16 +113,18 @@ export function LiveOpsCommandCenter({
         <FleetMap
           initial={initialPositions}
           token={mapboxToken}
-          onSelect={(p) => setSelectedTripId(p?.trip_id ?? null)}
-          selectedTripId={selectedTripId}
+          onSelect={(p) => setSelectedDriverId(p?.driver_id ?? null)}
+          selectedDriverId={selectedDriverId}
         />
 
         {/* Active vehicles strip below map */}
         <div className="rounded-2xl bg-white border border-ink-200/70 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-ink-900">Active trips</h3>
-              <p className="text-xs text-ink-500 mt-0.5">{positions.length} on the road</p>
+              <h3 className="text-sm font-bold text-ink-900">Live drivers</h3>
+              <p className="text-xs text-ink-500 mt-0.5">
+                {positions.length} sharing location · {summary.onTrip} on a trip
+              </p>
             </div>
             <Link
               href="/trips"
@@ -124,12 +135,12 @@ export function LiveOpsCommandCenter({
           </div>
           {positions.length === 0 ? (
             <p className="text-sm text-ink-500 italic text-center py-6">
-              No active trips. Vehicles will appear here once a trip starts.
+              No drivers sharing location. They appear here as soon as they log in and allow location.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {positions.map((p) => {
-                const isSelected = p.trip_id === selectedTripId;
+                const isSelected = p.driver_id === selectedDriverId;
                 const st = statusOf(p);
                 const stColor = {
                   moving: "bg-emerald-500",
@@ -139,9 +150,9 @@ export function LiveOpsCommandCenter({
                 }[st];
                 return (
                   <button
-                    key={p.trip_id}
+                    key={p.driver_id}
                     type="button"
-                    onClick={() => setSelectedTripId(isSelected ? null : p.trip_id)}
+                    onClick={() => setSelectedDriverId(isSelected ? null : p.driver_id)}
                     className={`text-left rounded-xl border p-3 transition-all ${
                       isSelected
                         ? "border-orange-300 bg-orange-50 ring-2 ring-orange-200"
@@ -149,14 +160,20 @@ export function LiveOpsCommandCenter({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <PlateBadge plate={p.plate_number} country={p.plate_country} size="sm" />
+                      {p.plate_number && p.plate_country ? (
+                        <PlateBadge plate={p.plate_number} country={p.plate_country} size="sm" />
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-ink-400">
+                          No vehicle
+                        </span>
+                      )}
                       <span className={`h-2 w-2 rounded-full ${stColor}`} />
                     </div>
                     <p className="text-xs font-semibold text-ink-900 truncate">
-                      {p.make} {p.model}
+                      {p.driver_name ?? "Unknown driver"}
                     </p>
                     <p className="text-[11px] text-ink-500 truncate mt-0.5">
-                      {p.driver_name ?? "—"}
+                      {p.trip_id ? `${p.make ?? ""} ${p.model ?? ""}`.trim() || "On a trip" : "No active trip"}
                     </p>
                     <div className="mt-2 flex items-baseline justify-between">
                       <span className="text-xs font-bold text-ink-900 font-plate">
@@ -232,16 +249,30 @@ function SelectedVehicleCard({ p, now }: { p: FleetPosition; now: number }) {
   return (
     <div className="rounded-2xl bg-white border border-ink-200/70 p-5">
       <div className="flex items-center justify-between mb-3">
-        <PlateBadge plate={p.plate_number} country={p.plate_country} />
-        <TripStatusBadge status={p.trip_status} />
+        {p.plate_number && p.plate_country ? (
+          <PlateBadge plate={p.plate_number} country={p.plate_country} />
+        ) : (
+          <span className="text-xs font-bold uppercase tracking-wide text-ink-400">
+            No vehicle
+          </span>
+        )}
+        {p.trip_status ? (
+          <TripStatusBadge status={p.trip_status} />
+        ) : (
+          <span className="inline-flex items-center rounded-md bg-violet-50 text-violet-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            No trip
+          </span>
+        )}
       </div>
-      <p className="text-base font-bold text-ink-900">
-        {p.make} {p.model}
-      </p>
-      <p className="text-xs text-ink-500 mt-0.5 inline-flex items-center gap-1.5">
-        <Users className="h-3 w-3" />
+      <p className="text-base font-bold text-ink-900 inline-flex items-center gap-1.5">
+        <Users className="h-4 w-4 text-ink-400" />
         {p.driver_name ?? "Unknown driver"}
       </p>
+      {(p.make || p.model) && (
+        <p className="text-xs text-ink-500 mt-0.5">
+          {p.make} {p.model}
+        </p>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Metric label="Speed" value={p.speed_kph != null ? `${Math.round(p.speed_kph)}` : "—"} unit="km/h" />
@@ -261,10 +292,10 @@ function SelectedVehicleCard({ p, now }: { p: FleetPosition; now: number }) {
       </div>
 
       <Link
-        href={`/trips/${p.trip_id}`}
+        href={p.trip_id ? `/trips/${p.trip_id}` : `/drivers/${p.driver_id}`}
         className="mt-4 flex items-center justify-center gap-2 h-10 rounded-xl bg-ink-900 hover:bg-ink-800 text-white text-sm font-semibold transition-colors"
       >
-        Open trip
+        {p.trip_id ? "Open trip" : "Driver profile"}
         <ArrowUpRight className="h-4 w-4" />
       </Link>
     </div>
