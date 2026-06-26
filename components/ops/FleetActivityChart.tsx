@@ -43,10 +43,24 @@ export function FleetActivityChart({ data }: FleetActivityChartProps) {
             axisLine={false}
             dy={8}
           />
+          {/* Trips (left) and kilometres (right) live on very different scales,
+              so each binds to its own axis to stay readable. */}
           <YAxis
+            yAxisId="trips"
             tick={{ fontSize: 11, fill: "#94a3b8" }}
             tickLine={false}
             axisLine={false}
+            allowDecimals={false}
+            width={32}
+          />
+          <YAxis
+            yAxisId="km"
+            orientation="right"
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            tickLine={false}
+            axisLine={false}
+            width={40}
+            tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
           />
           <Tooltip
             cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "4 4" }}
@@ -58,8 +72,13 @@ export function FleetActivityChart({ data }: FleetActivityChartProps) {
               padding: "8px 12px",
             }}
             labelStyle={{ color: "#475569", fontWeight: 600, marginBottom: 4 }}
+            formatter={(value, name) => {
+              const num = typeof value === "number" ? value : Number(value ?? 0);
+              return [name === "Kilometres" ? `${num.toLocaleString()} km` : num, name];
+            }}
           />
           <Area
+            yAxisId="trips"
             type="monotone"
             dataKey="trips"
             stroke="#ff5a1f"
@@ -68,6 +87,7 @@ export function FleetActivityChart({ data }: FleetActivityChartProps) {
             name="Trips"
           />
           <Area
+            yAxisId="km"
             type="monotone"
             dataKey="km"
             stroke="#0ea5e9"

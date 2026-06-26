@@ -14,6 +14,7 @@ interface VehicleOption {
   make: string;
   model: string;
   status: string;
+  currentDriver?: string | null;
 }
 
 interface AssignmentItem {
@@ -76,14 +77,14 @@ export function AssignmentPanel({
             Current and historical vehicle assignments
           </p>
         </div>
-        {!current && !picking && (
+        {!picking && (
           <button
             type="button"
             onClick={() => setPicking(true)}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 shadow-sm shadow-orange-200 transition-all"
           >
             <Plus className="h-4 w-4" />
-            Assign vehicle
+            {current ? "Change vehicle" : "Assign vehicle"}
           </button>
         )}
       </div>
@@ -169,10 +170,17 @@ export function AssignmentPanel({
                     country={v.plate_country}
                     size="sm"
                   />
-                  <span className="flex-1 text-sm font-medium text-ink-900">
-                    {v.make} {v.model}
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-ink-900 truncate">
+                      {v.make} {v.model}
+                    </span>
+                    {v.currentDriver && (
+                      <span className="block text-[11px] text-amber-600 truncate">
+                        Currently: {v.currentDriver} — assigning reassigns it
+                      </span>
+                    )}
                   </span>
-                  <span className="text-xs text-ink-500 capitalize">{v.status}</span>
+                  <span className="text-xs text-ink-500 capitalize shrink-0">{v.status}</span>
                 </button>
               ))
             )}

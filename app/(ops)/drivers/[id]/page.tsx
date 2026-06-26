@@ -108,7 +108,7 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
         .schema("app")
         .from("vehicles")
         .select("id, plate_number, plate_country, make, model, status")
-        .in("status", ["available", "maintenance"])
+        .neq("status", "decommissioned")
         .order("plate_number"),
       supabase
         .schema("app")
@@ -130,15 +130,35 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
   const current = (assignments ?? []).find((a) => a.ended_at === null) ?? null;
   const history = (assignments ?? []).filter((a) => a.ended_at !== null);
 
-  // Vehicles already assigned are excluded from the picker
+  // Show every (non-decommissioned) vehicle in the picker, annotated with who
+  // currently holds it. A live fleet has every vehicle assigned, so an
+  // "unassigned only" list would always be empty — picking a held vehicle
+  // reassigns it (assignVehicle ends the prior assignment).
   const { data: activeAssignments } = await supabase
     .schema("app")
     .from("vehicle_assignments")
-    .select("vehicle_id")
+    .select("vehicle_id, driver_id")
     .is("ended_at", null)
-    .returns<{ vehicle_id: string }[]>();
-  const usedVehicleIds = new Set((activeAssignments ?? []).map((a) => a.vehicle_id));
-  const pickable = (availableVehicles ?? []).filter((v) => !usedVehicleIds.has(v.id));
+    .returns<{ vehicle_id: string; driver_id: string }[]>();
+  const holderDriverIds = [...new Set((activeAssignments ?? []).map((a) => a.driver_id))];
+  const { data: holders } = holderDriverIds.length
+    ? await supabase
+        .schema("app")
+        .from("drivers")
+        .select("id, profiles!inner(full_name)")
+        .in("id", holderDriverIds)
+        .returns<{ id: string; profiles: { full_name: string | null } | null }[]>()
+    : { data: [] };
+  const nameByDriver = new Map<string, string>();
+  for (const h of holders ?? []) if (h.profiles?.full_name) nameByDriver.set(h.id, h.profiles.full_name);
+  const holderByVehicle = new Map<string, string>();
+  for (const a of activeAssignments ?? []) {
+    const nm = nameByDriver.get(a.driver_id);
+    if (nm) holderByVehicle.set(a.vehicle_id, nm);
+  }
+  const pickable = (availableVehicles ?? [])
+    .filter((v) => v.id !== current?.vehicle_id)
+    .map((v) => ({ ...v, currentDriver: holderByVehicle.get(v.id) ?? null }));
 
   const subsidiary = (subs ?? []).find((s) => s.id === driver.profiles?.subsidiary_id);
 

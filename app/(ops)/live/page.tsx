@@ -32,33 +32,81 @@ function greetingFor(): string {
   return "Good evening";
 }
 
-// Synthetic week activity sparkline data for demo (Phase 5 wires real data)
-const weekData = [
-  { day: "Mon", trips: 24, km: 1820 },
-  { day: "Tue", trips: 31, km: 2410 },
-  { day: "Wed", trips: 28, km: 2180 },
-  { day: "Thu", trips: 35, km: 2640 },
-  { day: "Fri", trips: 42, km: 3120 },
-  { day: "Sat", trips: 18, km: 1380 },
-  { day: "Sun", trips: 12, km: 920 },
-];
+const ACTIVITY_WEEKS = 8;
+
+interface TripActivityRow {
+  started_at: string | null;
+  start_odometer_km: number | null;
+  end_odometer_km: number | null;
+}
+
+/** Monday 00:00 (server-local) of the week containing `d`, matching Postgres date_trunc('week'). */
+function startOfWeek(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+
+/** Bucket trips into the last ACTIVITY_WEEKS weekly buckets: count + summed odometer km. */
+function weeklyActivity(rows: TripActivityRow[]): { day: string; trips: number; km: number }[] {
+  const thisMonday = startOfWeek(new Date());
+  const buckets = Array.from({ length: ACTIVITY_WEEKS }, (_, i) => {
+    const start = new Date(thisMonday);
+    start.setDate(start.getDate() - (ACTIVITY_WEEKS - 1 - i) * 7);
+    return {
+      startMs: start.getTime(),
+      endMs: start.getTime() + 7 * 86_400_000,
+      day: start.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      trips: 0,
+      km: 0,
+    };
+  });
+  for (const r of rows) {
+    if (!r.started_at) continue;
+    const t = new Date(r.started_at).getTime();
+    const b = buckets.find((x) => t >= x.startMs && t < x.endMs);
+    if (!b) continue;
+    b.trips += 1;
+    if (r.end_odometer_km != null && r.start_odometer_km != null) {
+      b.km += Math.max(r.end_odometer_km - r.start_odometer_km, 0);
+    }
+  }
+  return buckets.map(({ day, trips, km }) => ({ day, trips, km }));
+}
 
 export default async function LiveOpsPage() {
   const profile = await requireRole("fleet_manager", "admin");
   const supabase = await createClient();
 
-  const [{ data: vehicles }, { data: docs }, { data: subsidiaries }, { data: drivers }] =
-    await Promise.all([
-      supabase.schema("app").from("vehicles").select("*").returns<VehicleRow[]>(),
-      supabase
-        .schema("app")
-        .from("vehicle_documents")
-        .select("vehicle_id, document_type, expires_at")
-        .eq("is_active", true)
-        .returns<Pick<DocumentRow, "vehicle_id" | "document_type" | "expires_at">[]>(),
-      supabase.schema("app").from("subsidiaries").select("id"),
-      supabase.schema("app").from("drivers").select("id, is_active"),
-    ]);
+  const activityCutoff = new Date(startOfWeek(new Date()));
+  activityCutoff.setDate(activityCutoff.getDate() - (ACTIVITY_WEEKS - 1) * 7);
+
+  const [
+    { data: vehicles },
+    { data: docs },
+    { data: subsidiaries },
+    { data: drivers },
+    { data: activityRows },
+  ] = await Promise.all([
+    supabase.schema("app").from("vehicles").select("*").returns<VehicleRow[]>(),
+    supabase
+      .schema("app")
+      .from("vehicle_documents")
+      .select("vehicle_id, document_type, expires_at")
+      .eq("is_active", true)
+      .returns<Pick<DocumentRow, "vehicle_id" | "document_type" | "expires_at">[]>(),
+    supabase.schema("app").from("subsidiaries").select("id"),
+    supabase.schema("app").from("drivers").select("id, is_active"),
+    supabase
+      .schema("app")
+      .from("trips")
+      .select("started_at, start_odometer_km, end_odometer_km")
+      .gte("started_at", activityCutoff.toISOString())
+      .not("status", "in", "(planned,cancelled)")
+      .returns<TripActivityRow[]>(),
+  ]);
+
+  const activityData = weeklyActivity(activityRows ?? []);
 
   const allVehicles = vehicles ?? [];
   const active = allVehicles.filter((v) => v.status !== "decommissioned");
@@ -192,21 +240,17 @@ export default async function LiveOpsPage() {
           index={0}
           label="Active fleet"
           value={active.length}
-          delta={{ value: "12%", positive: true }}
           iconName="truck"
           tone="brand"
           hint={`${allVehicles.length - active.length} decommissioned`}
-          sparkline={[18, 19, 19, 20, 21, 21, active.length]}
         />
         <StatCard
           index={1}
           label="On trip"
           value={onTrip}
-          delta={{ value: "8%", positive: true }}
           iconName="activity"
           tone="sky"
           hint={`${available} ready to dispatch`}
-          sparkline={[5, 7, 6, 8, 10, 9, onTrip || 1]}
         />
         <StatCard
           index={2}
@@ -215,17 +259,14 @@ export default async function LiveOpsPage() {
           iconName="users"
           tone="violet"
           hint={`${(subsidiaries ?? []).length} subsidiaries`}
-          sparkline={[20, 21, 22, 22, 23, 23, 23]}
         />
         <StatCard
           index={3}
           label="Documents expired"
           value={expiredDocs}
-          delta={{ value: "3", positive: false }}
           iconName="alert"
           tone={expiredDocs > 0 ? "rose" : "emerald"}
           hint={`${expiringSoonDocs} expiring soon`}
-          sparkline={[1, 1, 2, 2, 3, 3, expiredDocs]}
         />
       </section>
 
@@ -235,7 +276,7 @@ export default async function LiveOpsPage() {
           <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
             <div>
               <h2 className="text-base font-semibold text-ink-900">Fleet Activity</h2>
-              <p className="text-xs text-ink-500 mt-0.5">Trips and kilometres over the last 7 days</p>
+              <p className="text-xs text-ink-500 mt-0.5">Trips and kilometres over the last 8 weeks</p>
             </div>
             <div className="flex items-center gap-4 text-xs">
               <span className="inline-flex items-center gap-1.5">
@@ -248,7 +289,7 @@ export default async function LiveOpsPage() {
               </span>
             </div>
           </div>
-          <FleetActivityChart data={weekData} />
+          <FleetActivityChart data={activityData} />
         </div>
 
         <div className="rounded-2xl bg-white border border-ink-200/70 p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
