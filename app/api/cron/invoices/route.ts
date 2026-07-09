@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isAuthorizedCron } from "@/lib/cron/auth";
+import { sendMonthlyReport } from "@/lib/ops/monthly-report";
 
 // Monthly billing job (Vercel Cron, 1st of the month). Generates a DRAFT
 // invoice per subsidiary for the prior calendar month — only where there were
@@ -62,5 +63,8 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, period: { start: startStr, end: endStr }, generated });
+  // Email the monthly summary to managers (no-op without SMTP).
+  const report = await sendMonthlyReport({ periodStart: startStr, periodEnd: endStr });
+
+  return NextResponse.json({ ok: true, period: { start: startStr, end: endStr }, generated, report });
 }

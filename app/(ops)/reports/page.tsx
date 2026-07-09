@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   RevenueTrendChart, SubsidiaryBarChart, FleetUtilisationChart,
 } from "@/components/ops/ReportsCharts";
+import { ReportEmailButton } from "@/components/ops/ReportEmailButton";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import type { CountryCode } from "@/types/domain";
 
@@ -130,6 +131,14 @@ export default async function ReportsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Link
+              href="/reports/costs"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-white/10 backdrop-blur text-white text-sm font-semibold hover:bg-white/15 border border-white/10 transition-colors"
+            >
+              <Wrench className="h-4 w-4" />
+              Cost analytics
+            </Link>
+            <ReportEmailButton />
             <a
               href="/reports/export/trips.csv"
               className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-white/10 backdrop-blur text-white text-sm font-semibold hover:bg-white/15 border border-white/10 transition-colors"
