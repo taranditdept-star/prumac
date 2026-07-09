@@ -25,6 +25,7 @@ import {
   ScrollText,
   ArrowLeftRight,
   Settings,
+  UserCog,
 } from "lucide-react";
 import type { AppRole } from "@/types/domain";
 
@@ -76,6 +77,7 @@ const SECTIONS = [
       { href: "/vehicles/lifecycle", label: "Depreciation", icon: Banknote, roles: ALL },
       { href: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
       { href: "/audit", label: "Audit log", icon: ScrollText, roles: ["admin"] },
+      { href: "/admin/users", label: "Accounts", icon: UserCog, roles: ["admin"] },
       { href: "/settings", label: "Settings", icon: Settings, roles: ["admin"] },
     ],
   },
