@@ -27,6 +27,7 @@ interface DriverWithJoins {
   } | null;
   vehicle_assignments: {
     vehicle_id: string;
+    ended_at: string | null;
     vehicles: {
       plate_number: string;
       plate_country: CountryCode;
@@ -85,7 +86,7 @@ export default async function DriversPage({
       is_active,
       created_at,
       profiles!inner(full_name, phone, avatar_url, subsidiary_id),
-      vehicle_assignments(vehicle_id, vehicles(plate_number, plate_country, make, model))
+      vehicle_assignments(vehicle_id, ended_at, vehicles(plate_number, plate_country, make, model))
     `)
     .eq("is_active", true)
     .order("created_at", { ascending: false })
@@ -102,9 +103,10 @@ export default async function DriversPage({
   }
 
   const list = drivers ?? [];
-  // Filter to current assignments only (ended_at IS NULL)
+  // Keep only CURRENT assignments (ended_at IS NULL) — the embed returns
+  // historical rows too, which previously rendered as the driver's live vehicle.
   for (const d of list) {
-    d.vehicle_assignments = (d.vehicle_assignments ?? []).filter((a) => a.vehicles);
+    d.vehicle_assignments = (d.vehicle_assignments ?? []).filter((a) => a.ended_at === null && a.vehicles);
   }
   const sorted = [...list].sort((a, b) => {
     const order = { expired: 0, critical: 1, warning: 2, ok: 3 } as const;

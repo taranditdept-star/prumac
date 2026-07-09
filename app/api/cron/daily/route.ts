@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isAuthorizedCron } from "@/lib/cron/auth";
+import { sendAlertDigest } from "@/lib/ops/alert-digest";
 
 // Daily maintenance job (Vercel Cron). Runs every alert scan that used to be a
 // manual "Scan" button, then flips past-due invoices to overdue. Idempotent —
@@ -41,18 +42,24 @@ export async function GET(request: Request) {
     results.part_stock = error ? { error: error.message } : data;
   }
 
-  // 5. Flip issued invoices to overdue once past their due date.
+  // 5. Flip issued invoices to overdue once STRICTLY past their due date.
+  // due_at is a date (midnight); compare against today's date so an invoice is
+  // not marked overdue on its own due date.
   const nowIso = new Date().toISOString();
+  const today = nowIso.slice(0, 10);
   {
     const { data, error } = await sb
       .schema("app")
       .from("invoices")
       .update({ status: "overdue" })
       .eq("status", "issued")
-      .lt("due_at", nowIso)
+      .lt("due_at", today)
       .select("id");
     results.marked_overdue = error ? { error: error.message } : data?.length ?? 0;
   }
+
+  // 6. Email a digest of unresolved alerts to managers (no-op without SMTP).
+  results.email_digest = await sendAlertDigest();
 
   return NextResponse.json({ ok: true, ran_at: nowIso, results });
 }

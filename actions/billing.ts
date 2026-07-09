@@ -125,37 +125,9 @@ export async function recordPayment(formData: FormData): Promise<ActionResult> {
     });
   if (insErr) return { error: insErr.message };
 
-  // Recompute invoice amount_paid + status
-  const { data: payments } = await supabase
-    .schema("app")
-    .from("invoice_payments")
-    .select("amount")
-    .eq("invoice_id", parsed.data.invoice_id)
-    .returns<{ amount: number }[]>();
-
-  const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
-
-  const { data: invoice } = await supabase
-    .schema("app")
-    .from("invoices")
-    .select("total_due")
-    .eq("id", parsed.data.invoice_id)
-    .single<{ total_due: number }>();
-
-  if (invoice) {
-    const newStatus =
-      totalPaid >= Number(invoice.total_due) - 0.01
-        ? "paid"
-        : totalPaid > 0
-          ? "partially_paid"
-          : "issued";
-
-    await supabase
-      .schema("app")
-      .from("invoices")
-      .update({ amount_paid: totalPaid, status: newStatus })
-      .eq("id", parsed.data.invoice_id);
-  }
+  // The invoice_payments_recalc trigger (0005_finance.sql) recomputes
+  // amount_paid + status atomically within the insert — do NOT recompute here
+  // (a JS read-sum-write races concurrent payments and clobbers the trigger).
 
   revalidatePath(`/invoices/${parsed.data.invoice_id}`);
   revalidatePath("/invoices");

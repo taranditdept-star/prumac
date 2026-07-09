@@ -295,7 +295,13 @@ export async function assignVehicle(formData: FormData): Promise<ActionResult> {
       notes: parsed.data.notes ?? null,
     });
 
-  if (error) return { error: error.message };
+  if (error) {
+    // Exclusion/unique conflict → a concurrent assignment beat us to it.
+    if (error.code === "23P01" || error.code === "23505") {
+      return { error: "That vehicle was just assigned to another driver — refresh and try again." };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath(`/drivers/${parsed.data.driver_id}`);
   revalidatePath(`/vehicles/${parsed.data.vehicle_id}`);

@@ -43,8 +43,7 @@ export async function signInWithEmail(formData: FormData): Promise<ActionResult>
     .select("role")
     .eq("id", signInData.user.id)
     .single<{ role: AppRole }>();
-
-  console.log("[signInWithEmail] profile lookup:", { profile, profileError });
+  void profileError;
 
   const target = roleDefaultPath(profile?.role ?? "driver");
 
@@ -106,8 +105,11 @@ export async function requestPasswordReset(formData: FormData): Promise<ActionRe
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
+  // Build the reset link from the app's own origin — never derive it from the
+  // Supabase hostname (that produced a non-existent <ref>.vercel.app domain).
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://prumac.vercel.app").replace(/\/$/, "");
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("supabase.co", "vercel.app")}/reset-password/confirm`,
+    redirectTo: `${siteUrl}/reset-password/confirm`,
   });
   if (error) return { error: error.message };
 

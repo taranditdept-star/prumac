@@ -96,10 +96,18 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
   const { data: vehicle } = await supabase
     .schema("app")
     .from("vehicles")
-    .select("current_odometer_km")
+    .select("current_odometer_km, default_subsidiary_id")
     .eq("id", parsed.data.vehicle_id)
-    .single<{ current_odometer_km: number }>();
+    .single<{ current_odometer_km: number; default_subsidiary_id: string | null }>();
   const lastKnown = vehicle?.current_odometer_km ?? null;
+
+  // A driver must not be able to bill a trip to an arbitrary subsidiary: for
+  // drivers, derive it from the vehicle's owner. Managers/admins (office
+  // dispatch) keep the value they chose.
+  const effectiveSubsidiaryId =
+    profile.role === "driver"
+      ? vehicle?.default_subsidiary_id ?? parsed.data.subsidiary_id
+      : parsed.data.subsidiary_id;
 
   const { data, error } = await supabase
     .schema("app")
@@ -107,7 +115,7 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     .insert({
       vehicle_id: parsed.data.vehicle_id,
       driver_id: parsed.data.driver_id,
-      subsidiary_id: parsed.data.subsidiary_id,
+      subsidiary_id: effectiveSubsidiaryId,
       purpose: parsed.data.purpose,
       route_description: parsed.data.route_description,
       origin_label: parsed.data.origin_label,
@@ -241,64 +249,19 @@ export async function endTrip(formData: FormData): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const { data: trip } = await supabase
-    .schema("app")
-    .from("trips")
-    .select("vehicle_id, start_odometer_km")
-    .eq("id", parsed.data.trip_id)
-    .single<{ vehicle_id: string; start_odometer_km: number }>();
 
-  if (!trip) return { error: "Trip not found" };
-
-  if (parsed.data.end_odometer_km < trip.start_odometer_km) {
-    return { error: "End odometer must be greater than or equal to start odometer." };
-  }
-
-  // Step 1 — end the trip via the user client (RLS confirms the caller owns it).
-  const nowIso = new Date().toISOString();
-  const { error } = await supabase
-    .schema("app")
-    .from("trips")
-    .update({
-      status: "ended",
-      ended_at: nowIso,
-      end_odometer_km: parsed.data.end_odometer_km,
-      fuel_litres: parsed.data.fuel_litres ?? null,
-      fuel_amount: parsed.data.fuel_amount ?? null,
-      load_count: parsed.data.load_count ?? null,
-    })
-    .eq("id", parsed.data.trip_id);
+  // One atomic RPC does end → complete → free vehicle → reconcile. This
+  // replaces the old two-call sequence that could strand a trip (and its
+  // vehicle) in 'ended' if the network dropped between the writes.
+  const { error } = await supabase.schema("app").rpc("fn_end_trip", {
+    p_trip_id: parsed.data.trip_id,
+    p_end_odometer: parsed.data.end_odometer_km,
+    p_fuel_litres: parsed.data.fuel_litres ?? null,
+    p_fuel_amount: parsed.data.fuel_amount ?? null,
+    p_load_count: parsed.data.load_count ?? null,
+  });
 
   if (error) return { error: error.message };
-
-  // Step 2 — auto-complete. Uses the service client so it works regardless of
-  // role (drivers can't update vehicles under RLS). Reconciliation is best
-  // effort: a manager can re-run it from the reconciliation review page.
-  const service = createServiceClient();
-  const { error: completeErr } = await service
-    .schema("app")
-    .from("trips")
-    .update({ status: "completed", completed_at: nowIso })
-    .eq("id", parsed.data.trip_id);
-
-  if (completeErr) {
-    // The trip is safely "ended"; surface the error so it can be completed later.
-    revalidatePath(`/trips/${parsed.data.trip_id}`);
-    return { error: `Trip ended but auto-complete failed: ${completeErr.message}` };
-  }
-
-  const { error: recErr } = await service
-    .schema("app")
-    .rpc("fn_reconcile_trip", { p_trip_id: parsed.data.trip_id });
-  if (recErr) {
-    console.error("Reconciliation failed for trip", parsed.data.trip_id, recErr.message);
-  }
-
-  await service
-    .schema("app")
-    .from("vehicles")
-    .update({ status: "available" })
-    .eq("id", trip.vehicle_id);
 
   revalidatePath(`/trips/${parsed.data.trip_id}`);
   revalidatePath("/trips");

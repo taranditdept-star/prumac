@@ -8,7 +8,10 @@ export const accidentCreateSchema = z.object({
   vehicle_id: uuid(),
   trip_id: uuid().nullable().optional(),
   severity: z.enum(SEVERITIES),
-  occurred_at: z.string().min(1, "When did it happen?"),
+  occurred_at: z
+    .string()
+    .min(1, "When did it happen?")
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), "Enter a valid date and time"),
   location_description: z.string().min(3, "Where did it happen?").max(500),
   odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
   lat: z.coerce.number().min(-90).max(90).nullable().optional(),

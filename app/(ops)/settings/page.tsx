@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getSettingsFresh } from "@/lib/settings";
 import { ThresholdsForm, TermsForm } from "@/components/ops/SettingsForms";
+import { EmailDigestCard } from "@/components/ops/EmailDigestCard";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function SettingsPage() {
 
       <div className="space-y-6">
         <ThresholdsForm odometerThreshold={odometerThreshold} />
+        <EmailDigestCard />
         <TermsForm
           title={terms?.title ?? "PRUMAC Vehicle-Use Agreement & Privacy Notice"}
           body={terms?.body_md ?? ""}
