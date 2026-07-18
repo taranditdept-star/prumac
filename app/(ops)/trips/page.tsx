@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Map, Plus, ArrowUpRight, Activity, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Map, Plus, ArrowUpRight, Activity, CheckCircle2, Clock, XCircle, ClipboardList } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
@@ -47,6 +47,22 @@ function rangeFor(period: string): { start: string; end: string } | null {
   return null;
 }
 
+const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+// A custom [from,to] window (to inclusive) overrides the named period.
+function customRange(from?: string, to?: string): { start: string; end: string } | null {
+  if (!from && !to) return null;
+  if (!(from && isDate(from)) && !(to && isDate(to))) return null;
+  const start = from && isDate(from) ? from : "2000-01-01";
+  let end = "2999-01-01";
+  if (to && isDate(to)) {
+    const t = new Date(`${to}T00:00:00Z`);
+    t.setUTCDate(t.getUTCDate() + 1);
+    end = t.toISOString().slice(0, 10);
+  }
+  return { start, end };
+}
+
 function monthsBetween(min: string | null, max: string | null): string[] {
   if (!min || !max) return [];
   const a = new Date(min), b = new Date(max);
@@ -62,7 +78,7 @@ function monthsBetween(min: string | null, max: string | null): string[] {
 export default async function TripsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; vehicle?: string; status?: string; q?: string }>;
+  searchParams: Promise<{ period?: string; vehicle?: string; status?: string; q?: string; from?: string; to?: string }>;
 }) {
   await requireRole("fleet_manager", "admin");
   const sp = await searchParams;
@@ -72,7 +88,8 @@ export default async function TripsPage({
   const vehicleId = sp.vehicle && sp.vehicle !== "all" ? sp.vehicle : null;
   const statusFilter = sp.status && sp.status !== "all" ? sp.status : null;
   const qText = (sp.q ?? "").trim();
-  const range = rangeFor(period);
+  // A custom from/to range wins over the named period.
+  const range = customRange(sp.from, sp.to) ?? rangeFor(period);
 
   // Apply the shared (non-status) filters to any query builder.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,12 +180,20 @@ export default async function TripsPage({
           <h1 className="text-2xl lg:text-3xl font-bold text-ink-900 tracking-tight">Trips</h1>
           <p className="text-sm text-ink-500 mt-1">All vehicle trips, live and historic</p>
         </div>
-        <Link
-          href="/trips/new"
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 shadow-sm transition-all"
-        >
-          <Plus className="h-4 w-4" /> New trip
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/trips/log"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 shadow-sm transition-all"
+          >
+            <ClipboardList className="h-4 w-4" /> Log mileage
+          </Link>
+          <Link
+            href="/trips/new"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 shadow-sm transition-all"
+          >
+            <Plus className="h-4 w-4" /> New trip
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

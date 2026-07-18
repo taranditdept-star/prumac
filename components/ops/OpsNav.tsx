@@ -26,6 +26,7 @@ import {
   ArrowLeftRight,
   Settings,
   UserCog,
+  ClipboardList,
 } from "lucide-react";
 import type { AppRole } from "@/types/domain";
 
@@ -38,6 +39,7 @@ const SECTIONS = [
       { href: "/live", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
       { href: "/live/map", label: "Live Map", icon: MapPin, roles: ALL },
       { href: "/trips", label: "Trips", icon: Map, roles: ALL },
+      { href: "/trips/log", label: "Log mileage", icon: ClipboardList, roles: ALL },
     ],
   },
   {
@@ -119,7 +121,7 @@ export function OpsNav({ role }: { role: AppRole }) {
   const pathname = usePathname();
   const isActive = (href: string) => {
     // Exact-match parents that also have child routes in the nav.
-    if (href === "/live" || href === "/maintenance" || href === "/drivers" || href === "/vehicles")
+    if (href === "/live" || href === "/maintenance" || href === "/drivers" || href === "/vehicles" || href === "/trips")
       return pathname === href;
     return pathname === href || pathname.startsWith(`${href}/`);
   };
