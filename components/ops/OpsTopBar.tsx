@@ -1,14 +1,16 @@
 "use client";
 
 import { useTransition } from "react";
-import { Bell, LogOut, HelpCircle, Plus } from "lucide-react";
+import { Bell, LogOut, HelpCircle, Plus, Menu } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "@/actions/auth";
 import { GlobalSearch } from "@/components/ops/GlobalSearch";
+import { useMobileNav } from "@/components/ops/mobile-nav";
 import type { ProfileRow } from "@/types/domain";
 
 export function OpsTopBar({ profile, alertCount = 0 }: { profile: ProfileRow; alertCount?: number }) {
   const [isPending, startTransition] = useTransition();
+  const { setOpen } = useMobileNav();
 
   function handleSignOut() {
     startTransition(async () => {
@@ -18,7 +20,17 @@ export function OpsTopBar({ profile, alertCount = 0 }: { profile: ProfileRow; al
   }
 
   return (
-    <header className="sticky top-0 z-30 h-16 shrink-0 flex items-center justify-between px-6 lg:px-8 border-b border-ink-200/70 bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 lg:px-8 border-b border-ink-200/70 bg-white/80 backdrop-blur-xl">
+      {/* Hamburger — opens the sidebar drawer on mobile */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+        className="lg:hidden mr-2 -ml-1 h-10 w-10 shrink-0 rounded-xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-600 transition-colors"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       {/* Global search */}
       <GlobalSearch />
 
