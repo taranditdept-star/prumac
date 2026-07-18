@@ -79,6 +79,10 @@ export async function createDriver(formData: FormData): Promise<ActionResult<{ i
       full_name: data.full_name,
       phone,
       subsidiary_id: data.subsidiary_id ?? null,
+      // The new-user trigger stubs is_active=false; RLS role_is() needs it true
+      // or the driver sees none of their own vehicle/assignment data. This
+      // driver is fully formed (licence provided), so activate immediately.
+      is_active: true,
     });
 
   if (profileError) {

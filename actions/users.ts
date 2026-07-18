@@ -64,6 +64,11 @@ export async function createDriverLogin(formData: FormData): Promise<UserActionR
     role: "driver",
     full_name: parsed.data.full_name,
     subsidiary_id: parsed.data.subsidiary_id ?? null,
+    // The on_auth_user_created trigger stubs new profiles as is_active=false
+    // ("inactive until onboarding"). RLS's role_is() requires is_active, so an
+    // un-activated login can sign in but sees ZERO data. Activate on creation —
+    // the licence-pending gate still forces onboarding, this just lets RLS work.
+    is_active: true,
   });
   if (pErr) {
     await service.auth.admin.deleteUser(uid);
@@ -116,6 +121,11 @@ export async function createStaffLogin(formData: FormData): Promise<UserActionRe
     role: parsed.data.role,
     full_name: parsed.data.full_name,
     subsidiary_id: parsed.data.role === "subsidiary_billing" ? parsed.data.subsidiary_id ?? null : null,
+    // Staff have NO onboarding step to flip is_active, and the new-user trigger
+    // stubs it false. Without this, a freshly created manager/admin/billing user
+    // can log in but every RLS-guarded query returns nothing (role_is() checks
+    // is_active). Activate on creation so the account actually works.
+    is_active: true,
   });
   if (pErr) {
     await service.auth.admin.deleteUser(uid);
