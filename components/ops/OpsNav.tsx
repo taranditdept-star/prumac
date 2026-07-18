@@ -27,6 +27,7 @@ import {
   Settings,
   UserCog,
   ClipboardList,
+  CalendarCheck,
 } from "lucide-react";
 import type { AppRole } from "@/types/domain";
 
@@ -47,6 +48,7 @@ const SECTIONS = [
     items: [
       { href: "/vehicles", label: "Vehicles", icon: Truck, roles: ALL },
       { href: "/drivers", label: "Drivers", icon: Users, roles: ALL },
+      { href: "/attendance", label: "Attendance", icon: CalendarCheck, roles: ALL },
       { href: "/drivers/scorecards", label: "Scorecards", icon: Trophy, roles: ALL },
       { href: "/drivers/leave", label: "Leave", icon: CalendarDays, roles: ALL },
       { href: "/handovers", label: "Handovers", icon: ArrowLeftRight, roles: ALL },

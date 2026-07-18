@@ -15,6 +15,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/ops/StatCard";
 import { AlertsStatus } from "@/components/ops/AlertsStatus";
+import { AttendanceBanner } from "@/components/attendance/AttendanceBanner";
 import { StatusDonut } from "@/components/ops/StatusDonut";
 import { FleetActivityChart } from "@/components/ops/FleetActivityChart";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
@@ -153,6 +154,9 @@ export default async function LiveOpsPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
+      {/* Daily attendance check-in */}
+      <AttendanceBanner />
+
       {/* Emergency-alert enablement / test / status */}
       <AlertsStatus />
 

@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
+import { AttendanceBanner } from "@/components/attendance/AttendanceBanner";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -136,6 +137,9 @@ export default async function DriverHomePage() {
 
   return (
     <div className="px-4 py-5 space-y-5">
+      {/* Daily attendance check-in — top of the home screen */}
+      <AttendanceBanner />
+
       {/* Pending takeover banner */}
       {pendingTakeovers > 0 && (
         <Link
