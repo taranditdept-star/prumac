@@ -94,7 +94,8 @@ export default async function OpsLeavePage() {
           </div>
         ) : (
           <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
                   <th className="px-6 py-3 text-left">Driver</th>
@@ -124,6 +125,7 @@ export default async function OpsLeavePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </section>
@@ -159,7 +161,8 @@ export default async function OpsLeavePage() {
             <h2 className="text-lg font-bold text-ink-900">Recent decisions</h2>
           </header>
           <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <tbody className="divide-y divide-ink-100">
                 {recent.map((l) => (
                   <tr key={l.id} className="hover:bg-ink-50/40 transition-colors">
@@ -175,6 +178,7 @@ export default async function OpsLeavePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
       )}

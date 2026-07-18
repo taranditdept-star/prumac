@@ -92,7 +92,8 @@ export default async function AccidentsPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
                 <th className="px-6 py-3 text-left">Severity</th>
@@ -153,6 +154,7 @@ export default async function AccidentsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

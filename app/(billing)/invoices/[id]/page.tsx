@@ -188,6 +188,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                 No billable trips in this period
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-ink-100">
                   {tripLines.map((l) => (
@@ -195,6 +196,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
 
@@ -206,6 +208,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   Maintenance credits
                 </p>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-ink-100">
                   {maintenanceLines.map((l) => (
@@ -213,6 +216,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </tbody>
               </table>
+              </div>
             </section>
           )}
 
@@ -224,6 +228,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   Previous balance
                 </p>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-ink-100">
                   {balanceLines.map((l) => (
@@ -231,6 +236,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </tbody>
               </table>
+              </div>
             </section>
           )}
 

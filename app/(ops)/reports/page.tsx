@@ -256,7 +256,8 @@ export default async function ReportsPage() {
           <h2 className="text-base font-bold text-ink-900">All subsidiaries</h2>
           <p className="text-xs text-ink-500 mt-0.5">Revenue and outstanding per subsidiary</p>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="border-b border-ink-100 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
               <th className="px-6 py-3 text-left">Subsidiary</th>
@@ -308,6 +309,7 @@ export default async function ReportsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Bottom insights */}

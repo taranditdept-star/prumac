@@ -141,7 +141,8 @@ export default async function AuditPage({
 
                 <div className="border-t border-ink-100 px-5 py-4 bg-ink-50/30">
                   {e.operation === "UPDATE" && cols.length > 0 ? (
-                    <table className="w-full text-xs">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-xs min-w-[640px]">
                       <thead>
                         <tr className="text-[10px] uppercase tracking-[0.12em] text-ink-400 font-bold">
                           <th className="text-left py-1.5 pr-4">Field</th>
@@ -159,6 +160,7 @@ export default async function AuditPage({
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   ) : (
                     <pre className="text-[11px] text-ink-600 whitespace-pre-wrap break-all font-plate">
                       {JSON.stringify(e.after_row ?? e.before_row ?? {}, null, 2).slice(0, 1500)}
