@@ -13,6 +13,14 @@ const nextConfig: NextConfig = {
       // so reports with photos submit reliably.
       bodySizeLimit: "10mb",
     },
+    // Client-side Router Cache: reuse a page's rendered payload for a short
+    // window so clicking back to a screen you just viewed is instant instead of
+    // re-fetching from the server (Supabase sits in Paris — every round-trip
+    // costs). Mutations still call revalidatePath, which busts the cache.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
 };
 
