@@ -192,8 +192,9 @@ export default async function VehiclesPage({
                           {classIcon[v.class] ?? "🚗"}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-ink-900 group-hover:text-orange-600 transition-colors">
+                          <p className="font-semibold text-ink-900 group-hover:text-orange-600 transition-colors flex items-center gap-2">
                             {v.make} {v.model}
+                            {v.is_pool && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Pool</span>}
                           </p>
                           <p className="text-xs text-ink-500 mt-0.5 capitalize">
                             {v.variant ?? v.class.replace("_", " ")}

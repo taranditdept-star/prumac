@@ -44,6 +44,7 @@ export const vehicleSchema = z.object({
   fuel_type: z.enum(FUEL_TYPES),
   fuel_tank_litres: z.number().positive().nullable().optional(),
   status: z.enum(VEHICLE_STATUSES).default("available"),
+  is_pool: z.boolean().optional().default(false),
   home_branch: z.string().max(60).nullable().optional(),
   default_subsidiary_id: uuid().nullable().optional(),
   current_odometer_km: z.number().int().min(0).default(0),

@@ -6,6 +6,7 @@ const PURPOSES = ["delivery", "sales", "collection", "maintenance_run", "admin",
 export const mileageSchema = z
   .object({
     vehicle_id: uuid(),
+    driver_id: uuid(),
     occurred_on: z
       .string()
       .min(1, "Pick the date")

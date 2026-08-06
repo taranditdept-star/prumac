@@ -133,6 +133,7 @@ function formDataToVehicleObject(fd: FormData): Record<string, unknown> {
     fuel_type: fd.get("fuel_type"),
     fuel_tank_litres: fd.get("fuel_tank_litres") ? Number(fd.get("fuel_tank_litres")) : null,
     status: fd.get("status") || "available",
+    is_pool: fd.get("is_pool") === "on" || fd.get("is_pool") === "true",
     home_branch: fd.get("home_branch") || null,
     default_subsidiary_id: fd.get("default_subsidiary_id") || null,
     current_odometer_km: fd.get("current_odometer_km")

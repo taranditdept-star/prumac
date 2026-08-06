@@ -266,6 +266,20 @@ export function VehicleForm({ vehicle, subsidiaries }: VehicleFormProps) {
             />
           </div>
         </div>
+        <label htmlFor="is_pool" className="flex items-start gap-3 rounded-lg border border-input bg-background p-3 cursor-pointer hover:border-orange-300 transition-colors">
+          <input
+            id="is_pool"
+            name="is_pool"
+            type="checkbox"
+            defaultChecked={vehicle?.is_pool ?? false}
+            className="mt-0.5 h-4 w-4 rounded border-input accent-orange-500"
+          />
+          <span>
+            <span className="block text-sm font-medium">Pool / shared vehicle</span>
+            <span className="block text-xs text-muted-foreground">No fixed driver — it belongs to its department and anyone can drive it. The driver is chosen per trip.</span>
+          </span>
+        </label>
+
         <div className="space-y-1.5">
           <Label htmlFor="condition_notes">Condition notes</Label>
           <textarea

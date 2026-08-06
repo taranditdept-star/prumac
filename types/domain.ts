@@ -60,6 +60,7 @@ export interface VehicleRow {
   status: VehicleStatus;
   home_branch: string | null;
   default_subsidiary_id: string | null;
+  is_pool: boolean;
   current_odometer_km: number;
   last_service_odometer_km: number | null;
   service_interval_km: number;

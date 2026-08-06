@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Truck, Search, Gauge, User, Check, Save, ArrowRight } from "lucide-react";
+import { Truck, Search, Gauge, User, Check, Save, ArrowRight, Users } from "lucide-react";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { logMileage } from "@/actions/mileage";
 import type { CountryCode } from "@/types/domain";
@@ -14,7 +14,14 @@ export interface VehicleOpt {
   make: string;
   model: string;
   odometer: number;
-  driver: string | null;
+  isPool: boolean;
+  ownerId: string | null;
+  ownerName: string | null;
+}
+
+export interface DriverOpt {
+  id: string;
+  name: string;
 }
 
 const PURPOSES = [
@@ -36,11 +43,16 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
+export function MileageLogForm({ vehicles, drivers }: { vehicles: VehicleOpt[]; drivers: DriverOpt[] }) {
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
+
+  const [driverId, setDriverId] = useState<string>("");
+  const [driverQuery, setDriverQuery] = useState("");
+  const [driverOpen, setDriverOpen] = useState(false);
+
   const [date, setDate] = useState(todayISO());
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -48,35 +60,41 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
   const [purpose, setPurpose] = useState("delivery");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
-  const [logged, setLogged] = useState<{ plate: string; start: number; end: number; km: number }[]>([]);
+  const [logged, setLogged] = useState<{ plate: string; driver: string; start: number; end: number; km: number }[]>([]);
   const endRef = useRef<HTMLInputElement>(null);
 
   const selected = vehicles.find((v) => v.id === vehicleId) ?? null;
+  const selectedDriver = drivers.find((d) => d.id === driverId) ?? null;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q
-      ? vehicles.filter((v) => `${v.plate} ${v.make} ${v.model}`.toLowerCase().includes(q))
-      : vehicles;
+    const list = q ? vehicles.filter((v) => `${v.plate} ${v.make} ${v.model}`.toLowerCase().includes(q)) : vehicles;
     return list.slice(0, 60);
   }, [query, vehicles]);
+
+  const filteredDrivers = useMemo(() => {
+    const q = driverQuery.trim().toLowerCase();
+    const list = q ? drivers.filter((d) => d.name.toLowerCase().includes(q)) : drivers;
+    return list.slice(0, 60);
+  }, [driverQuery, drivers]);
 
   function pick(v: VehicleOpt) {
     setVehicleId(v.id);
     setQuery("");
     setOpen(false);
     setStart(String(v.odometer ?? 0));
+    setDriverId(v.ownerId ?? ""); // pre-fill the owner; pool cars start empty
     setTimeout(() => endRef.current?.focus(), 50);
   }
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selected) {
-      toast.error("Pick a vehicle first.");
-      return;
-    }
+    if (!selected) { toast.error("Pick a vehicle first."); return; }
+    if (!driverId) { toast.error("Pick who drove this trip."); return; }
+
     const fd = new FormData();
     fd.set("vehicle_id", selected.id);
+    fd.set("driver_id", driverId);
     fd.set("occurred_on", date);
     fd.set("origin_label", origin);
     fd.set("destination_label", destination);
@@ -87,14 +105,11 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
 
     startTransition(async () => {
       const r = await logMileage(fd);
-      if ("error" in r) {
-        toast.error(r.error);
-        return;
-      }
+      if ("error" in r) { toast.error(r.error); return; }
       const km = Number(end) - Number(start);
       toast.success(`Saved · ${km.toLocaleString()} km. Odometer now ${r.endOdometer.toLocaleString()}.`);
-      setLogged((prev) => [{ plate: selected.plate, start: Number(start), end: Number(end), km }, ...prev].slice(0, 20));
-      // Prep the next entry: same vehicle, start = the reading we just ended on.
+      setLogged((prev) => [{ plate: selected.plate, driver: selectedDriver?.name ?? "—", start: Number(start), end: Number(end), km }, ...prev].slice(0, 20));
+      // Prep next entry: same vehicle + driver, start = the reading we ended on.
       setStart(String(r.endOdometer));
       setEnd("");
       setOrigin("");
@@ -117,14 +132,17 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
               <div className="flex items-center gap-3">
                 <PlateBadge plate={selected.plate} country={selected.country} size="sm" />
                 <div>
-                  <p className="text-sm font-semibold text-ink-900">{selected.make} {selected.model}</p>
+                  <p className="text-sm font-semibold text-ink-900 flex items-center gap-2">
+                    {selected.make} {selected.model}
+                    {selected.isPool && <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Pool</span>}
+                  </p>
                   <p className="text-xs text-ink-500 flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1"><User className="h-3 w-3" /> {selected.driver ?? "No driver assigned"}</span>
+                    <span className="inline-flex items-center gap-1"><User className="h-3 w-3" /> {selected.isPool ? "Shared — pick a driver" : selected.ownerName ?? "No regular driver"}</span>
                     <span className="inline-flex items-center gap-1 font-plate"><Gauge className="h-3 w-3" /> {selected.odometer.toLocaleString()} km</span>
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => { setVehicleId(null); setStart(""); }} className="text-xs font-semibold text-ink-500 hover:text-ink-900">
+              <button type="button" onClick={() => { setVehicleId(null); setStart(""); setDriverId(""); }} className="text-xs font-semibold text-ink-500 hover:text-ink-900">
                 Change
               </button>
             </div>
@@ -151,7 +169,59 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-orange-50/60">
                           <PlateBadge plate={v.plate} country={v.country} size="sm" />
                           <span className="flex-1 text-sm text-ink-800">{v.make} {v.model}</span>
+                          {v.isPool && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-700">Pool</span>}
                           <span className="font-plate text-xs text-ink-400">{v.odometer.toLocaleString()} km</span>
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Driver picker — who actually drove this trip */}
+        <div className="rounded-2xl border border-ink-200/70 bg-white p-5">
+          <p className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900">
+            <Users className="h-4 w-4 text-orange-500" /> Driver
+            {selected?.isPool && <span className="text-xs font-normal text-violet-600">· shared vehicle, anyone can drive</span>}
+          </p>
+          {selectedDriver ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white text-sm font-bold">{selectedDriver.name.charAt(0).toUpperCase()}</span>
+                <div>
+                  <p className="text-sm font-semibold text-ink-900">{selectedDriver.name}</p>
+                  {selected && !selected.isPool && selected.ownerId === selectedDriver.id && <p className="text-[11px] text-ink-500">Regular driver</p>}
+                </div>
+              </div>
+              <button type="button" onClick={() => { setDriverId(""); setDriverQuery(""); }} className="text-xs font-semibold text-ink-500 hover:text-ink-900">Change</button>
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                <input
+                  value={driverQuery}
+                  onChange={(e) => { setDriverQuery(e.target.value); setDriverOpen(true); }}
+                  onFocus={() => setDriverOpen(true)}
+                  placeholder="Search the driver who drove…"
+                  className={`${field} pl-10`}
+                />
+              </div>
+              {driverOpen && (
+                <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-ink-200 bg-white py-1 shadow-xl">
+                  {filteredDrivers.length === 0 ? (
+                    <li className="px-4 py-3 text-sm text-ink-500">No drivers match.</li>
+                  ) : (
+                    filteredDrivers.map((d) => (
+                      <li key={d.id}>
+                        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setDriverId(d.id); setDriverQuery(""); setDriverOpen(false); }}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-emerald-50/60">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink-100 text-xs font-bold text-ink-500">{d.name.charAt(0).toUpperCase()}</span>
+                          <span className="flex-1 text-sm text-ink-800">{d.name}</span>
+                          {selected && d.id === selected.ownerId && <span className="text-[10px] font-bold uppercase text-emerald-600">Owner</span>}
                         </button>
                       </li>
                     ))
@@ -211,7 +281,7 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
 
         <button
           type="submit"
-          disabled={isPending || !selected}
+          disabled={isPending || !selected || !driverId}
           className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 text-base font-bold text-white shadow-lg shadow-orange-600/20 transition-all hover:bg-orange-700 active:scale-[0.99] disabled:opacity-50"
         >
           <Save className="h-5 w-5" />
@@ -225,17 +295,20 @@ export function MileageLogForm({ vehicles }: { vehicles: VehicleOpt[] }) {
           <p className="text-sm font-bold text-ink-900">Logged this session</p>
           <p className="mt-0.5 text-xs text-ink-500">{logged.length} record{logged.length === 1 ? "" : "s"} saved</p>
           {logged.length === 0 ? (
-            <p className="mt-4 text-xs text-ink-400 italic">Saved entries appear here. The next entry auto-fills the start from the last reading.</p>
+            <p className="mt-4 text-xs text-ink-400 italic">Saved entries appear here. The next entry keeps the vehicle &amp; driver and auto-fills the start.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {logged.map((l, i) => (
-                <li key={i} className="flex items-center gap-2 rounded-lg bg-ink-50 px-3 py-2 text-xs">
-                  <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  <span className="font-plate font-semibold text-ink-800">{l.plate}</span>
-                  <span className="font-plate text-ink-500">{l.start.toLocaleString()}</span>
-                  <ArrowRight className="h-3 w-3 text-ink-400" />
-                  <span className="font-plate text-ink-500">{l.end.toLocaleString()}</span>
-                  <span className="ml-auto font-plate font-bold text-orange-600">{l.km.toLocaleString()} km</span>
+                <li key={i} className="rounded-lg bg-ink-50 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span className="font-plate font-semibold text-ink-800">{l.plate}</span>
+                    <span className="font-plate text-ink-500">{l.start.toLocaleString()}</span>
+                    <ArrowRight className="h-3 w-3 text-ink-400" />
+                    <span className="font-plate text-ink-500">{l.end.toLocaleString()}</span>
+                    <span className="ml-auto font-plate font-bold text-orange-600">{l.km.toLocaleString()} km</span>
+                  </div>
+                  <p className="mt-0.5 pl-5 text-ink-400 truncate">{l.driver}</p>
                 </li>
               ))}
             </ul>

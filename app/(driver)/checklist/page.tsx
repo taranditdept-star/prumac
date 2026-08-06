@@ -43,18 +43,29 @@ export default async function DriverChecklistPage({
     .maybeSingle<{ id: string }>();
 
   // A driver may hold several vehicles at once (e.g. Blessing) — never single().
-  const { data: assignments } = await supabase
-    .schema("app")
-    .from("vehicle_assignments")
-    .select("vehicles(id, plate_number, plate_country, make, model, current_odometer_km)")
-    .eq("driver_id", driver?.id ?? "")
-    .is("ended_at", null)
-    .order("started_at", { ascending: false })
-    .returns<{ vehicles: AssignedVehicle | null }[]>();
+  // Pool/shared vehicles are also inspectable by any driver.
+  const [{ data: assignments }, { data: poolVehicles }] = await Promise.all([
+    supabase
+      .schema("app")
+      .from("vehicle_assignments")
+      .select("vehicles(id, plate_number, plate_country, make, model, current_odometer_km)")
+      .eq("driver_id", driver?.id ?? "")
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .returns<{ vehicles: AssignedVehicle | null }[]>(),
+    supabase
+      .schema("app")
+      .from("vehicles")
+      .select("id, plate_number, plate_country, make, model, current_odometer_km")
+      .eq("is_pool", true)
+      .neq("status", "decommissioned")
+      .order("plate_number")
+      .returns<AssignedVehicle[]>(),
+  ]);
 
-  const vehicles = (assignments ?? [])
-    .map((a) => a.vehicles)
-    .filter((v): v is AssignedVehicle => v != null);
+  const seen = new Set<string>();
+  const vehicles = [...(assignments ?? []).map((a) => a.vehicles), ...(poolVehicles ?? [])]
+    .filter((v): v is AssignedVehicle => v != null && !seen.has(v.id) && !!seen.add(v.id));
 
   if (!driver || vehicles.length === 0) {
     return (

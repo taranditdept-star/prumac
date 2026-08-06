@@ -18,6 +18,7 @@ export async function logMileage(formData: FormData): Promise<MileageResult> {
 
   const parsed = mileageSchema.safeParse({
     vehicle_id: formData.get("vehicle_id"),
+    driver_id: formData.get("driver_id"),
     occurred_on: formData.get("occurred_on"),
     origin_label: formData.get("origin_label") || null,
     destination_label: formData.get("destination_label") || null,
@@ -39,18 +40,17 @@ export async function logMileage(formData: FormData): Promise<MileageResult> {
     .maybeSingle<{ default_subsidiary_id: string | null; current_odometer_km: number | null }>();
   if (!veh) return { error: "Vehicle not found." };
 
-  const { data: assign } = await service
+  // The driver is chosen per trip (pre-filled with the vehicle's owner in the
+  // form when it has one). Pool/shared vehicles have no fixed owner, so we no
+  // longer require an assignment — we trust the picked driver (the trips FK
+  // enforces it's a real driver).
+  const { data: drv } = await service
     .schema("app")
-    .from("vehicle_assignments")
-    .select("driver_id")
-    .eq("vehicle_id", d.vehicle_id)
-    .is("ended_at", null)
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ driver_id: string }>();
-  if (!assign?.driver_id) {
-    return { error: "This vehicle has no assigned driver. Assign one first (Drivers → the vehicle)." };
-  }
+    .from("drivers")
+    .select("id")
+    .eq("id", d.driver_id)
+    .maybeSingle<{ id: string }>();
+  if (!drv) return { error: "Pick who drove this trip." };
 
   let subsidiaryId = veh.default_subsidiary_id;
   if (!subsidiaryId) {
@@ -70,7 +70,7 @@ export async function logMileage(formData: FormData): Promise<MileageResult> {
 
   const { error } = await service.schema("app").from("trips").insert({
     vehicle_id: d.vehicle_id,
-    driver_id: assign.driver_id,
+    driver_id: d.driver_id,
     subsidiary_id: subsidiaryId,
     purpose: d.purpose,
     origin_label: d.origin_label ?? null,

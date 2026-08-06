@@ -30,8 +30,8 @@ export default async function DriverStartTripPage() {
     );
   }
 
-  // Fetch all currently-assigned vehicles + subsidiaries + the active terms
-  const [{ data: assignments }, { data: subs }, { data: agreement }] = await Promise.all([
+  // Fetch assigned vehicles + POOL vehicles (anyone can drive) + subsidiaries + terms
+  const [{ data: assignments }, { data: poolVehicles }, { data: subs }, { data: agreement }] = await Promise.all([
     supabase
       .schema("app")
       .from("vehicle_assignments")
@@ -40,6 +40,14 @@ export default async function DriverStartTripPage() {
       .is("ended_at", null)
       .order("started_at", { ascending: false })
       .returns<{ vehicles: AssignedVehicle | null }[]>(),
+    supabase
+      .schema("app")
+      .from("vehicles")
+      .select("id, plate_number, plate_country, make, model, current_odometer_km, default_subsidiary_id")
+      .eq("is_pool", true)
+      .neq("status", "decommissioned")
+      .order("plate_number")
+      .returns<AssignedVehicle[]>(),
     // Drivers can't read app.subsidiaries directly (RLS); use the safe RPC.
     supabase.schema("app").rpc("fn_subsidiary_options"),
     supabase
@@ -53,9 +61,10 @@ export default async function DriverStartTripPage() {
 
   const subsidiaryOptions = (Array.isArray(subs) ? subs : []) as { id: string; name: string }[];
 
-  const vehicles = (assignments ?? [])
-    .map((a) => a.vehicles)
-    .filter((v): v is AssignedVehicle => v != null);
+  // Merge assigned + pool, de-duplicated (a driver could hold a pool car too).
+  const seen = new Set<string>();
+  const vehicles = [...(assignments ?? []).map((a) => a.vehicles), ...(poolVehicles ?? [])]
+    .filter((v): v is AssignedVehicle => v != null && !seen.has(v.id) && !!seen.add(v.id));
 
   return (
     <div className="p-4 pt-6 space-y-5">
