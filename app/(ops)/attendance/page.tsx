@@ -1,9 +1,25 @@
-import { CalendarCheck, Check, Clock, Users, UserCheck, UserX } from "lucide-react";
+import { CalendarCheck, Check, Clock, Users, UserCheck, UserX, LogIn, MoonStar } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { getLoginActivity, type LoginStatus } from "@/lib/ops/login-activity";
 import type { AppRole } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
+
+function fmtLastLogin(iso: string | null, days: number | null): string {
+  if (!iso || days == null) return "Never logged in";
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const LOGIN_TONE: Record<LoginStatus, { chip: string; label: string }> = {
+  active: { chip: "bg-emerald-50 text-emerald-700", label: "Active" },
+  idle: { chip: "bg-amber-50 text-amber-700", label: "Idle" },
+  dormant: { chip: "bg-rose-50 text-rose-700", label: "Dormant" },
+  never: { chip: "bg-ink-100 text-ink-500", label: "Never" },
+};
 
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -62,6 +78,8 @@ export default async function AttendancePage({
       .eq("attendance_date", date)
       .returns<{ profile_id: string; marked_at: string }[]>(),
   ]);
+
+  const login = await getLoginActivity();
 
   const markByProfile = new Map((marks ?? []).map((m) => [m.profile_id, m.marked_at]));
   const people = (profiles ?? []).map((p) => ({ ...p, markedAt: markByProfile.get(p.id) ?? null }));
@@ -168,6 +186,45 @@ export default async function AttendancePage({
             ))}
           </div>
         )}
+      </section>
+
+      {/* App login activity — who's actually using the system */}
+      <section className="pt-2">
+        <div className="mb-3 flex items-center gap-2">
+          <LogIn className="h-4 w-4 text-ink-400" />
+          <h2 className="text-sm font-bold text-ink-900">App login activity</h2>
+          <span className="text-xs text-ink-400">— who is (and isn&rsquo;t) signing in</span>
+        </div>
+
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryTile icon={LogIn} tone="emerald" label="Active (7d)" value={login.summary.active} />
+          <SummaryTile icon={Clock} tone="sky" label="Idle (8–30d)" value={login.summary.idle} />
+          <SummaryTile icon={MoonStar} tone="rose" label="Dormant (30d+)" value={login.summary.dormant} />
+          <SummaryTile icon={UserX} tone="rose" label="Never logged in" value={login.summary.never} />
+        </div>
+
+        <div className="divide-y divide-ink-100 overflow-hidden rounded-2xl border border-ink-200/70 bg-white">
+          {login.rows.map((r) => {
+            const t = LOGIN_TONE[r.status];
+            return (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${r.status === "active" ? "bg-emerald-500 text-white" : "bg-ink-100 text-ink-500"}`}>
+                  {r.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink-900">{r.name}</p>
+                  <p className="text-xs text-ink-400">
+                    {roleLabel(r.role as AppRole)}{r.loginId ? ` · ${r.loginId}` : ""}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-medium text-ink-600">{fmtLastLogin(r.lastSignInAt, r.daysSince)}</p>
+                  <span className={`mt-0.5 inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold ${t.chip}`}>{t.label}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );
