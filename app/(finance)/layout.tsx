@@ -6,6 +6,7 @@ import { ManagerAlerting } from "@/components/ops/ManagerAlerting";
 import { MobileNavProvider } from "@/components/ops/mobile-nav";
 import { SidebarDrawer } from "@/components/ops/SidebarDrawer";
 import { FinanceNav } from "@/components/finance/FinanceNav";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 // Finance is management-level: managers + admins only (never drivers, and not
 // the external subsidiary-billing contacts — company financials are confidential).
@@ -26,6 +27,7 @@ export default async function FinanceLayout({ children }: { children: React.Reac
           <main className="flex-1">{children}</main>
         </div>
         <ManagerAlerting />
+        <ChatWidget currentProfileId={profile.id} currentName={profile.full_name ?? "You"} />
       </div>
     </MobileNavProvider>
   );

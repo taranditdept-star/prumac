@@ -6,6 +6,7 @@ import { OpsTopBar } from "@/components/ops/OpsTopBar";
 import { ManagerAlerting } from "@/components/ops/ManagerAlerting";
 import { MobileNavProvider } from "@/components/ops/mobile-nav";
 import { SidebarDrawer } from "@/components/ops/SidebarDrawer";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireRole("fleet_manager", "admin");
@@ -24,6 +25,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
           <main className="flex-1">{children}</main>
         </div>
         <ManagerAlerting />
+        <ChatWidget currentProfileId={profile.id} currentName={profile.full_name ?? "You"} />
       </div>
     </MobileNavProvider>
   );

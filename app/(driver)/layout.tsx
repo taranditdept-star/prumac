@@ -5,6 +5,7 @@ import { DriverBottomTabs } from "@/components/driver/BottomTabs";
 import { DriverHeader } from "@/components/driver/DriverHeader";
 import { LiveLocationProvider } from "@/components/driver/LiveLocationProvider";
 import { LocationPermissionBanner } from "@/components/driver/LocationPermissionBanner";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 const GRADIENTS = [
   "from-orange-400 to-pink-500",
@@ -94,6 +95,7 @@ export default async function DriverLayout({ children }: { children: React.React
           {children}
         </main>
         <DriverBottomTabs activeTripId={activeTripId} />
+        <ChatWidget currentProfileId={profile.id} currentName={profile.full_name ?? "You"} offsetClass="bottom-24" />
       </div>
     </LiveLocationProvider>
   );
