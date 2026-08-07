@@ -57,7 +57,8 @@ export function VehicleChecklist({
   }, [items]);
 
   const [confirmed, setConfirmed] = useState<boolean[]>(() => sections.map(() => false));
-  const [open, setOpen] = useState(0); // section index, or REVIEW
+  // No sections (mis-seeded/empty template) → go straight to the review + submit screen.
+  const [open, setOpen] = useState(sections.length ? 0 : REVIEW); // section index, or REVIEW
 
   const confirmedCount = confirmed.filter(Boolean).length;
   const allConfirmed = confirmedCount === sections.length && sections.length > 0;
@@ -87,10 +88,17 @@ export function VehicleChecklist({
   }
 
   function cycle(id: string) {
-    setResults((prev) => {
-      const next: Result = prev[id] === "pass" ? "attention" : prev[id] === "attention" ? "fail" : "pass";
-      return { ...prev, [id]: next };
-    });
+    const cur = results[id];
+    const next: Result = cur === "pass" ? "attention" : cur === "attention" ? "fail" : "pass";
+    setResults((p) => ({ ...p, [id]: next }));
+    // Returning an item to "pass" drops any defect note so it can't ship on a passing check.
+    if (next === "pass") {
+      setItemNotes((n) => {
+        const c = { ...n };
+        delete c[id];
+        return c;
+      });
+    }
   }
 
   function advanceFrom(idx: number) {
@@ -117,16 +125,25 @@ export function VehicleChecklist({
   }
 
   function handleSubmit() {
-    const itemsPayload = items.map((i) => ({
-      checklist_item_id: i.id,
-      result: results[i.id] ?? "pass",
-      notes: itemNotes[i.id] || undefined,
-    }));
+    const odo = Number(odometer);
+    if (!odometer.trim() || !Number.isFinite(odo) || odo <= 0) {
+      toast.error("Enter the current mileage before submitting.");
+      return;
+    }
+    const itemsPayload = items.map((i) => {
+      const res = results[i.id] ?? "pass";
+      return {
+        checklist_item_id: i.id,
+        result: res,
+        // Only carry a note on a flagged item — never on a passing check.
+        notes: res !== "pass" ? itemNotes[i.id] || undefined : undefined,
+      };
+    });
     startTransition(async () => {
       const result = await submitStandaloneInspection({
         vehicle_id: vehicleId,
         template_id: templateId,
-        odometer_km: Number(odometer),
+        odometer_km: odo,
         notes: notes || undefined,
         items: itemsPayload,
       });
