@@ -1,17 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, X, ChevronLeft, Send, Search, PenSquare, Users, Loader2, Smile, Sparkles } from "lucide-react";
+import { MessageCircle, X, ChevronLeft, Send, Search, PenSquare, Users, Loader2, Smile, Sparkles, Sticker } from "lucide-react";
 import { toast } from "sonner";
 import {
-  chatClient, listConversations, listContacts, listMembers, ensureTeam, getOrCreateDm, listMessages, sendMessage, markRead,
+  chatClient, listConversations, listContacts, listMembers, ensureTeam, heartbeat, getOrCreateDm, listMessages, sendMessage, markRead,
   type Conversation, type Contact, type Message,
 } from "@/lib/chat/api";
-import { chitsanoGroupReply } from "@/actions/chat";
+import { chitsanoGroupReply, notifyNewMessage } from "@/actions/chat";
 
 type View = "list" | "contacts" | "thread";
 
 const EMOJIS = ["😀","😁","😂","🤣","😊","😍","😎","😅","😴","🤔","😳","😢","😡","😬","🤦","🫡","👋","🙏","👍","👎","👌","👏","🙌","💪","🔥","✅","❌","⚠️","🚗","🚚","⛽","🛞","🔧","📍","🕒","💬","❤️","🎉","🚨","📞","📅","💰","📦","🏁","🆗","🙋","☑️","😉"];
+// Big single-glyph "stickers" — no image pipeline, WhatsApp-emoji-sticker feel.
+const STICKERS = ["👍","🔥","🎉","😂","❤️","🙏","👏","💪","🚗","⛽","✅","⚠️","🚨","😴","🫡","🥳","👌","🙌","😅","🤝"];
+
+const ONLINE_MS = 90_000;
+function isOnline(iso: string | null): boolean {
+  return !!iso && Date.now() - new Date(iso).getTime() < ONLINE_MS;
+}
+function lastSeenText(iso: string | null): string {
+  if (!iso) return "offline";
+  if (isOnline(iso)) return "online"; // agree with the green dot's threshold
+  const mins = Math.max(Math.floor((Date.now() - new Date(iso).getTime()) / 60000), 1);
+  if (mins < 60) return `last seen ${mins}m ago`;
+  if (mins < 1440) return `last seen ${Math.floor(mins / 60)}h ago`;
+  return `last seen ${new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
+}
 
 function initials(name: string | null): string {
   return (name ?? "?").trim().charAt(0).toUpperCase() || "?";
@@ -80,10 +95,18 @@ export function ChatWidget({
   const [sending, setSending] = useState(false);
   const [botTyping, setBotTyping] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showStickers, setShowStickers] = useState(false);
+  const [, setNow] = useState(0); // ticks to refresh online / last-seen
   const [mention, setMention] = useState<{ active: boolean; query: string }>({ active: false, query: "" });
 
   const activeIdRef = useRef<string | null>(null);
+  const activeGroupRef = useRef(false);
+  const viewRef = useRef<View>("list");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
@@ -97,6 +120,23 @@ export function ChatWidget({
   }
 
   useEffect(() => {
+    // Presence heartbeat while the app is open.
+    heartbeat();
+    const hb = setInterval(heartbeat, 45000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") heartbeat();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    // Refresh presence + list periodically so online dots stay current.
+    const tick = setInterval(() => {
+      setNow(Date.now());
+      refreshList();
+      if (activeIdRef.current && activeGroupRef.current) listMembers(activeIdRef.current).then(setMembers).catch(() => {});
+      // Keep the New-chat picker's presence dots fresh too (last_seen is captured at fetch time).
+      if (viewRef.current === "contacts") listContacts().then(setContacts).catch(() => {});
+    }, 30000);
+
     setLoadingList(true);
     ensureTeam()
       .then(() => listConversations())
@@ -117,6 +157,9 @@ export function ChatWidget({
       })
       .subscribe();
     return () => {
+      clearInterval(hb);
+      clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVis);
       chatClient().removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,10 +172,12 @@ export function ChatWidget({
   async function openThread(conv: Conversation) {
     setActive(conv);
     activeIdRef.current = conv.conversation_id;
+    activeGroupRef.current = conv.is_group;
     setView("thread");
     setMessages([]);
     setMembers([]);
     setShowEmoji(false);
+    setShowStickers(false);
     setMention({ active: false, query: "" });
     setLoadingThread(true);
     try {
@@ -164,6 +209,7 @@ export function ChatWidget({
       await openThread({
         conversation_id: convId, is_group: false,
         other_id: contact.id, other_name: contact.full_name, other_role: contact.role, other_avatar: contact.avatar_url,
+        other_last_seen: contact.last_seen,
         last_body: null, last_at: null, last_sender: null, unread: 0, updated_at: new Date().toISOString(),
       });
       refreshList();
@@ -177,12 +223,14 @@ export function ChatWidget({
     if (!body || !active || sending) return;
     setInput("");
     setShowEmoji(false);
+    setShowStickers(false);
     setMention({ active: false, query: "" });
     setSending(true);
     try {
       const msg = await sendMessage(active.conversation_id, currentProfileId, body);
       setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [...prev, msg]));
       refreshList();
+      notifyNewMessage(active.conversation_id, body, false).catch(() => {});
       if (active.is_group && /@chitsano/i.test(body)) {
         setBotTyping(true);
         chitsanoGroupReply(active.conversation_id, body).finally(() => setBotTyping(false));
@@ -192,6 +240,19 @@ export function ChatWidget({
       toast.error("Message not sent — try again.");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function sendSticker(emoji: string) {
+    if (!active) return;
+    setShowStickers(false);
+    try {
+      const msg = await sendMessage(active.conversation_id, currentProfileId, emoji, "sticker");
+      setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [...prev, msg]));
+      refreshList();
+      notifyNewMessage(active.conversation_id, emoji, true).catch(() => {});
+    } catch {
+      toast.error("Couldn't send sticker.");
     }
   }
 
@@ -214,7 +275,9 @@ export function ChatWidget({
       setView("list");
       setActive(null);
       activeIdRef.current = null;
+      activeGroupRef.current = false;
       setShowEmoji(false);
+      setShowStickers(false);
       refreshList();
     } else if (view === "contacts") {
       setView("list");
@@ -226,10 +289,14 @@ export function ChatWidget({
     : contacts;
 
   const mentionCandidates = mention.active
-    ? [{ id: "chitsano", full_name: "Chitsano AI", role: "assistant", avatar_url: null } as Contact, ...members.filter((m) => m.id !== currentProfileId)]
+    ? [{ id: "chitsano", full_name: "Chitsano AI", role: "assistant", avatar_url: null, last_seen: null } as Contact, ...members.filter((m) => m.id !== currentProfileId)]
         .filter((c) => c.full_name.toLowerCase().includes(mention.query.toLowerCase()))
         .slice(0, 6)
     : [];
+
+  const activeFresh = active ? conversations.find((c) => c.conversation_id === active.conversation_id) : undefined;
+  const otherLastSeen = activeFresh?.other_last_seen ?? active?.other_last_seen ?? null;
+  const groupOnline = members.filter((m) => m.id !== currentProfileId && isOnline(m.last_seen)).length;
 
   return (
     <>
@@ -269,8 +336,10 @@ export function ChatWidget({
               {view === "thread" && active ? (
                 <>
                   <p className="truncate text-sm font-bold leading-tight">{active.other_name ?? "Chat"}</p>
-                  <p className="truncate text-[11px] text-white/60">
-                    {active.is_group ? `${members.length} members · @Chitsano to ask` : roleLabel(active.other_role)}
+                  <p className={`truncate text-[11px] ${!active.is_group && isOnline(otherLastSeen) ? "text-emerald-300" : "text-white/60"}`}>
+                    {active.is_group
+                      ? `${members.length} members${groupOnline > 0 ? ` · ${groupOnline} online` : ""}`
+                      : lastSeenText(otherLastSeen)}
                   </p>
                 </>
               ) : (
@@ -304,8 +373,13 @@ export function ChatWidget({
                             <Users className="h-5 w-5" />
                           </span>
                         ) : (
-                          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-white ${avatarColor(c.other_id)}`}>
-                            {initials(c.other_name)}
+                          <span className="relative shrink-0">
+                            <span className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-bold text-white ${avatarColor(c.other_id)}`}>
+                              {initials(c.other_name)}
+                            </span>
+                            {isOnline(c.other_last_seen) && (
+                              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                            )}
                           </span>
                         )}
                         <span className="min-w-0 flex-1">
@@ -353,8 +427,13 @@ export function ChatWidget({
                     {filteredContacts.map((p) => (
                       <li key={p.id}>
                         <button type="button" onClick={() => startChat(p)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-ink-50/60">
-                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(p.id)}`}>
-                            {initials(p.full_name)}
+                          <span className="relative shrink-0">
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${avatarColor(p.id)}`}>
+                              {initials(p.full_name)}
+                            </span>
+                            {isOnline(p.last_seen) && (
+                              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                            )}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-ink-900">{p.full_name}</span>
@@ -390,6 +469,15 @@ export function ChatWidget({
                     const mine = !bot && m.sender_id === currentProfileId;
                     const showName = active.is_group && !mine;
                     const senderName = bot ? "Chitsano AI" : memberMap.get(m.sender_id ?? "")?.full_name ?? "Member";
+                    if (m.kind === "sticker") {
+                      return (
+                        <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+                          {showName && <span className="mb-0.5 px-1 text-[11px] font-bold text-ink-500">{senderName}</span>}
+                          <span className="text-5xl leading-none">{m.body}</span>
+                          <span className="mt-0.5 px-1 text-[10px] text-ink-400">{fmtTime(m.created_at)}</span>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                         <div
@@ -474,16 +562,40 @@ export function ChatWidget({
                   </div>
                 )}
 
+                {/* sticker picker */}
+                {showStickers && (
+                  <div className="absolute bottom-full left-2.5 mb-1 grid w-64 grid-cols-5 gap-1 rounded-xl border border-ink-200 bg-white p-2 shadow-xl">
+                    {STICKERS.map((s) => (
+                      <button key={s} type="button" onClick={() => sendSticker(s)} className="rounded-lg py-1 text-3xl hover:bg-ink-100">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
                     setShowEmoji((v) => !v);
+                    setShowStickers(false);
                     setMention({ active: false, query: "" });
                   }}
                   aria-label="Emoji"
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-400 hover:bg-ink-100 hover:text-ink-700"
                 >
                   <Smile className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStickers((v) => !v);
+                    setShowEmoji(false);
+                    setMention({ active: false, query: "" });
+                  }}
+                  aria-label="Stickers"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                >
+                  <Sticker className="h-5 w-5" />
                 </button>
                 <input
                   value={input}

@@ -46,6 +46,8 @@ export interface PushPayload {
   url?: string;
   /** Grouping tag; same tag replaces an earlier notification. */
   tag?: string;
+  /** Category, e.g. "chat" — the service worker renders it more gently. */
+  kind?: string;
 }
 
 export interface PushResult {
@@ -123,5 +125,48 @@ export async function sendPushToManagers(payload: PushPayload): Promise<PushResu
     console.error("[push] fan-out error", err);
   }
 
+  return { configured: true, total, sent, failed };
+}
+
+/** Push to a specific set of profiles (e.g. chat recipients). Never throws. */
+export async function sendPushToProfiles(profileIds: string[], payload: PushPayload): Promise<PushResult> {
+  if (!ensureConfigured()) return { configured: false, total: 0, sent: 0, failed: 0 };
+  const ids = [...new Set(profileIds)].filter(Boolean);
+  if (ids.length === 0) return { configured: true, total: 0, sent: 0, failed: 0 };
+
+  let total = 0;
+  let sent = 0;
+  let failed = 0;
+  try {
+    const sb = createServiceClient();
+    const { data: subs } = await sb
+      .schema("app")
+      .from("push_subscriptions")
+      .select("id, endpoint, p256dh, auth")
+      .in("profile_id", ids)
+      .returns<SubRow[]>();
+    if (!subs || subs.length === 0) return { configured: true, total: 0, sent: 0, failed: 0 };
+
+    total = subs.length;
+    const body = JSON.stringify(payload);
+    await Promise.all(
+      subs.map(async (s) => {
+        try {
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
+          sent++;
+        } catch (err) {
+          failed++;
+          const status = (err as { statusCode?: number })?.statusCode;
+          if (status === 404 || status === 410) {
+            await sb.schema("app").from("push_subscriptions").delete().eq("id", s.id);
+          } else {
+            console.error("[push] send failed", status ?? (err as Error)?.message);
+          }
+        }
+      }),
+    );
+  } catch (err) {
+    console.error("[push] fan-out error", err);
+  }
   return { configured: true, total, sent, failed };
 }

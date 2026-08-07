@@ -69,19 +69,33 @@ self.addEventListener("push", (event) => {
     data = { title: "PRUMAC alert", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "PRUMAC emergency";
+  // Chat messages are gentler than emergency alerts: they auto-dismiss and
+  // vibrate softly instead of staying on screen with the emergency pattern.
+  const isChat = data.kind === "chat";
+  const title = data.title || (isChat ? "New message" : "PRUMAC emergency");
   const options = {
     body: data.body || "",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    tag: data.tag || "prumac-alert",
+    tag: data.tag || (isChat ? "prumac-chat" : "prumac-alert"),
     renotify: true, // re-alert even if a notification with this tag exists
-    requireInteraction: true, // stays on screen until the manager acts
-    vibrate: [400, 200, 400, 200, 400, 200, 600],
-    data: { url: data.url || "/live" },
+    requireInteraction: !isChat, // emergencies stay until acted on; chat auto-dismisses
+    vibrate: isChat ? [120, 60, 120] : [400, 200, 400, 200, 400, 200, 600],
+    data: { url: data.url || (isChat ? "/home" : "/live") },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    (async () => {
+      // Chat: if the app is already open and focused, the message is on screen
+      // via Realtime — an OS alert would just be noise. Suppress it. Emergency
+      // alerts always show regardless of focus.
+      if (isChat) {
+        const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        if (wins.some((c) => c.focused || c.visibilityState === "visible")) return;
+      }
+      await self.registration.showNotification(title, options);
+    })(),
+  );
 });
 
 // Tapping the notification focuses an existing tab (navigating it to the
