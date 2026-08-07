@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export interface Conversation {
   conversation_id: string;
+  is_group: boolean;
   other_id: string | null;
   other_name: string | null;
   other_role: string | null;
@@ -27,7 +28,8 @@ export interface Contact {
 export interface Message {
   id: string;
   conversation_id: string;
-  sender_id: string;
+  sender_id: string | null;
+  sender_kind: "user" | "chitsano";
   body: string;
   created_at: string;
 }
@@ -48,6 +50,20 @@ export async function listContacts(): Promise<Contact[]> {
   return (data ?? []) as Contact[];
 }
 
+/** Make sure the current user is in the team group; returns the team id. */
+export async function ensureTeam(): Promise<string | null> {
+  const { data, error } = await chatClient().schema("app").rpc("fn_ensure_team_membership");
+  if (error) return null;
+  return (data as string) ?? null;
+}
+
+/** Human members of a conversation (for group sender names + @mentions). */
+export async function listMembers(conversationId: string): Promise<Contact[]> {
+  const { data, error } = await chatClient().schema("app").rpc("fn_conversation_members", { p_conversation: conversationId });
+  if (error) throw error;
+  return (data ?? []) as Contact[];
+}
+
 export async function getOrCreateDm(otherId: string): Promise<string> {
   const { data, error } = await chatClient().schema("app").rpc("fn_get_or_create_dm", { p_other: otherId });
   if (error) throw error;
@@ -58,7 +74,7 @@ export async function listMessages(conversationId: string): Promise<Message[]> {
   const { data, error } = await chatClient()
     .schema("app")
     .from("messages")
-    .select("id, conversation_id, sender_id, body, created_at")
+    .select("id, conversation_id, sender_id, sender_kind, body, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(300);
@@ -71,7 +87,7 @@ export async function sendMessage(conversationId: string, senderId: string, body
     .schema("app")
     .from("messages")
     .insert({ conversation_id: conversationId, sender_id: senderId, body })
-    .select("id, conversation_id, sender_id, body, created_at")
+    .select("id, conversation_id, sender_id, sender_kind, body, created_at")
     .single();
   if (error) throw error;
   return data as Message;

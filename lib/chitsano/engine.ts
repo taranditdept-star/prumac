@@ -42,7 +42,7 @@ function stripTail(s: string): string {
   return cut || s.trim();
 }
 
-export async function ask(raw: string): Promise<Reply> {
+export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promise<Reply> {
   const text = (raw ?? "").trim();
   const t = text.toLowerCase();
   if (!t) return msg("Ask me something about the fleet — try \"who isn't logging in?\"");
@@ -100,6 +100,9 @@ export async function ask(raw: string): Promise<Reply> {
   }
 
   if (/\b(financ\w*|money|revenue|profit|debtors?|owe[ds]?|owing|receivables?|cash|income|expenses?|turnover)\b/.test(t)) {
+    if (opts?.allowFinance === false) {
+      return msg("I can't share financial figures in the team chat — ask me privately from the Chitsano assistant.");
+    }
     return msg(await READ_TOOLS.get_finance_summary.run({}));
   }
 
