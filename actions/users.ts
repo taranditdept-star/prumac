@@ -63,7 +63,8 @@ export async function createDriverLogin(formData: FormData): Promise<UserActionR
     id: uid,
     role: "driver",
     full_name: parsed.data.full_name,
-    subsidiary_id: parsed.data.subsidiary_id ?? null,
+    // Drivers never belong to a subsidiary (profiles check constraint).
+    subsidiary_id: null,
     // The on_auth_user_created trigger stubs new profiles as is_active=false
     // ("inactive until onboarding"). RLS's role_is() requires is_active, so an
     // un-activated login can sign in but sees ZERO data. Activate on creation —

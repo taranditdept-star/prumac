@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { uuid } from "./uuid";
 
-// Common ZW + SA licence classes
+// Zimbabwe licence classes are numeric (1–5); South Africa uses letter codes.
+// The picker shows the set for the selected country; validation accepts either
+// (a union) so editing legacy records never fails.
+export const ZW_LICENCE_CLASSES = ["1", "2", "3", "4", "5"] as const;
+export const ZA_LICENCE_CLASSES = ["A", "A1", "B", "C1", "C", "EB", "EC1", "EC", "PRDP"] as const;
 const LICENCE_CLASSES = [
-  "A",   "A1",  "B",   "C1",  "C",   "EB",  "EC1", "EC", "PRDP",
+  "1", "2", "3", "4", "5",
+  "A", "A1", "B", "C1", "C", "EB", "EC1", "EC", "PRDP",
 ] as const;
 
 export const driverCreateSchema = z.object({
@@ -24,7 +29,8 @@ export const driverCreateSchema = z.object({
   home_address: z.string().max(500).nullable().optional(),
   next_of_kin_name: z.string().max(120).nullable().optional(),
   next_of_kin_phone: z.string().max(20).nullable().optional(),
-  subsidiary_id: uuid().nullable().optional(),
+  // Drivers do NOT belong to a subsidiary (DB constraint
+  // subsidiary_user_has_subsidiary forbids it for non-billing users).
 });
 
 export const driverUpdateSchema = driverCreateSchema

@@ -45,7 +45,6 @@ export async function createDriver(formData: FormData): Promise<ActionResult<{ i
     home_address: formData.get("home_address") || null,
     next_of_kin_name: formData.get("next_of_kin_name") || null,
     next_of_kin_phone: formData.get("next_of_kin_phone") || null,
-    subsidiary_id: formData.get("subsidiary_id") || null,
   };
 
   const parsed = driverCreateSchema.safeParse(raw);
@@ -78,7 +77,9 @@ export async function createDriver(formData: FormData): Promise<ActionResult<{ i
       role: "driver",
       full_name: data.full_name,
       phone,
-      subsidiary_id: data.subsidiary_id ?? null,
+      // Drivers never belong to a subsidiary — the profiles check constraint
+      // subsidiary_user_has_subsidiary rejects a non-null subsidiary here.
+      subsidiary_id: null,
       // The new-user trigger stubs is_active=false; RLS role_is() needs it true
       // or the driver sees none of their own vehicle/assignment data. This
       // driver is fully formed (licence provided), so activate immediately.
@@ -143,13 +144,12 @@ export async function updateDriver(formData: FormData): Promise<ActionResult> {
     home_address: formData.get("home_address") || null,
     next_of_kin_name: formData.get("next_of_kin_name") || null,
     next_of_kin_phone: formData.get("next_of_kin_phone") || null,
-    subsidiary_id: formData.get("subsidiary_id") || null,
   };
 
   const parsed = driverUpdateSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const { id, full_name, subsidiary_id, ...driverFields } = parsed.data;
+  const { id, full_name, ...driverFields } = parsed.data;
   const supabase = await createClient();
 
   // Update driver row (RLS allows fleet_manager/admin via drivers_write_managers)
@@ -161,8 +161,9 @@ export async function updateDriver(formData: FormData): Promise<ActionResult> {
 
   if (driverError) return { error: driverError.message };
 
-  // Update profile name/subsidiary via service client (avoids the role-guard trigger)
-  if (full_name !== undefined || subsidiary_id !== undefined) {
+  // Update profile name via service client (avoids the role-guard trigger).
+  // Drivers never have a subsidiary, so it's never written here.
+  if (full_name !== undefined) {
     const { data: driver } = await supabase
       .schema("app")
       .from("drivers")
@@ -172,10 +173,7 @@ export async function updateDriver(formData: FormData): Promise<ActionResult> {
 
     if (driver) {
       const service = createServiceClient();
-      const update: Record<string, unknown> = {};
-      if (full_name !== undefined) update.full_name = full_name;
-      if (subsidiary_id !== undefined) update.subsidiary_id = subsidiary_id;
-      await service.schema("app").from("profiles").update(update).eq("id", driver.profile_id);
+      await service.schema("app").from("profiles").update({ full_name }).eq("id", driver.profile_id);
     }
   }
 

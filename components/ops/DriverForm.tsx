@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createDriver, updateDriver } from "@/actions/drivers";
-import { LICENCE_CLASSES } from "@/lib/validation/driver";
+import { ZW_LICENCE_CLASSES, ZA_LICENCE_CLASSES } from "@/lib/validation/driver";
 import type { DriverRow } from "@/types/domain";
 
 interface SubsidiaryOption {
@@ -17,17 +17,27 @@ interface SubsidiaryOption {
 
 interface DriverFormProps {
   driver?: DriverRow & { profile?: { full_name: string | null; phone: string | null; subsidiary_id: string | null } };
-  subsidiaries: SubsidiaryOption[];
+  // Deprecated & ignored — drivers don't belong to a subsidiary (DB constraint).
+  // Kept optional so existing callers still type-check.
+  subsidiaries?: SubsidiaryOption[];
 }
 
-export function DriverForm({ driver, subsidiaries }: DriverFormProps) {
+export function DriverForm({ driver }: DriverFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [classes, setClasses] = useState<string[]>(driver?.licence_classes ?? []);
+  const [country, setCountry] = useState<"ZW" | "ZA">((driver?.licence_country as "ZW" | "ZA") ?? "ZW");
+  const classOptions = country === "ZA" ? ZA_LICENCE_CLASSES : ZW_LICENCE_CLASSES;
   const isEdit = !!driver;
 
   function toggleClass(c: string) {
     setClasses((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
+  function onCountryChange(c: "ZW" | "ZA") {
+    setCountry(c);
+    const allowed: readonly string[] = c === "ZA" ? ZA_LICENCE_CLASSES : ZW_LICENCE_CLASSES;
+    setClasses((prev) => prev.filter((x) => allowed.includes(x)));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -102,20 +112,6 @@ export function DriverForm({ driver, subsidiaries }: DriverFormProps) {
             className={inputCls + " font-plate"}
           />
         </Field>
-        <Field label="Home subsidiary">
-          <select
-            name="subsidiary_id"
-            defaultValue={driver?.profile?.subsidiary_id ?? ""}
-            className={selectCls}
-          >
-            <option value="">— none —</option>
-            {subsidiaries.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </Field>
       </Section>
 
       {/* Licence */}
@@ -132,7 +128,8 @@ export function DriverForm({ driver, subsidiaries }: DriverFormProps) {
         <Field label="Country of issue" required>
           <select
             name="licence_country"
-            defaultValue={driver?.licence_country ?? "ZW"}
+            value={country}
+            onChange={(e) => onCountryChange(e.target.value as "ZW" | "ZA")}
             className={selectCls}
             required
           >
@@ -163,10 +160,10 @@ export function DriverForm({ driver, subsidiaries }: DriverFormProps) {
             Licence classes
           </Label>
           <p className="text-xs text-ink-400 mt-0.5 mb-3">
-            Tap each class the driver is endorsed for.
+            Tap each class the driver is endorsed for ({country === "ZA" ? "South African" : "Zimbabwean"} classes).
           </p>
           <div className="flex flex-wrap gap-2">
-            {LICENCE_CLASSES.map((c) => {
+            {classOptions.map((c) => {
               const on = classes.includes(c);
               return (
                 <button
