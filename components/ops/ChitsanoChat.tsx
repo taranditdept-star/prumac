@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Send, Check, X, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
-import { chitsanoSend, chitsanoConfirm } from "@/actions/chitsano";
-import type { ChatMessage, ChitsanoTurn, ProposedAction } from "@/lib/chitsano/shared";
+import { Sparkles, Send, Check, X, ShieldCheck, Loader2 } from "lucide-react";
+import { chitsanoAsk, chitsanoConfirm } from "@/actions/chitsano";
+import type { ProposedAction, Reply } from "@/lib/chitsano/shared";
 
 interface Bubble {
   id: number;
@@ -19,9 +19,8 @@ const SUGGESTIONS = [
   "How are we doing financially?",
 ];
 
-export function ChitsanoChat({ configured }: { configured: boolean }) {
+export function ChitsanoChat() {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
-  const [transcript, setTranscript] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState<ProposedAction | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,19 +37,12 @@ export function ChitsanoChat({ configured }: { configured: boolean }) {
     setBubbles((b) => [...b, { id: nextId(), role, text, error }]);
   }
 
-  function applyTurn(turn: ChitsanoTurn) {
-    if (turn.type === "unconfigured") {
-      push("assistant", "Chitsano isn't set up yet — an admin needs to add the AI key.", true);
-      return;
-    }
-    setTranscript(turn.messages);
-    if (turn.type === "message") {
-      push("assistant", turn.text);
-    } else if (turn.type === "proposal") {
-      if (turn.text) push("assistant", turn.text);
-      setPending(turn.proposal);
-    } else if (turn.type === "error") {
-      push("assistant", turn.text || "Something went wrong.", true);
+  function applyReply(reply: Reply) {
+    if (reply.type === "message") {
+      push("assistant", reply.text);
+    } else {
+      if (reply.text) push("assistant", reply.text);
+      setPending(reply.proposal);
     }
   }
 
@@ -59,12 +51,9 @@ export function ChitsanoChat({ configured }: { configured: boolean }) {
     if (!trimmed || busy || pending) return;
     setInput("");
     push("user", trimmed);
-    const next: ChatMessage[] = [...transcript, { role: "user", content: trimmed }];
-    setTranscript(next);
     setBusy(true);
     try {
-      const turn = await chitsanoSend(next);
-      applyTurn(turn);
+      applyReply(await chitsanoAsk(trimmed));
     } catch {
       push("assistant", "I couldn't reach the server — please try again.", true);
     } finally {
@@ -79,32 +68,12 @@ export function ChitsanoChat({ configured }: { configured: boolean }) {
     push("note", approve ? "You confirmed the action" : "You cancelled the action");
     setBusy(true);
     try {
-      const turn = await chitsanoConfirm(transcript, proposal, approve);
-      applyTurn(turn);
+      applyReply(await chitsanoConfirm(proposal, approve));
     } catch {
       push("assistant", "I couldn't complete that — please try again.", true);
     } finally {
       setBusy(false);
     }
-  }
-
-  if (!configured) {
-    return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="space-y-1.5 text-sm">
-            <p className="font-bold text-amber-900">Chitsano isn&rsquo;t switched on yet</p>
-            <p className="text-amber-800">
-              Chitsano needs an Anthropic AI key to work. An admin should add an{" "}
-              <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[12px]">ANTHROPIC_API_KEY</code>{" "}
-              environment variable in the deployment settings (Vercel → Project → Settings → Environment Variables), then redeploy.
-            </p>
-            <p className="text-amber-700">Everything else in PRUMAC keeps working normally without it.</p>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -118,7 +87,7 @@ export function ChitsanoChat({ configured }: { configured: boolean }) {
             </div>
             <p className="text-lg font-bold text-ink-900">Ask Chitsano</p>
             <p className="mt-1 text-sm text-ink-500">
-              Your fleet assistant. Ask about vehicles, drivers, accidents, trips, attendance, logins or finance — or ask it to assign a vehicle.
+              Your built-in fleet assistant. Ask about vehicles, drivers, accidents, trips, attendance, logins or finance — or ask it to assign a vehicle.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((s) => (
@@ -198,7 +167,7 @@ export function ChitsanoChat({ configured }: { configured: boolean }) {
 
         {busy && (
           <div className="flex items-center gap-2 pl-10 text-sm text-ink-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Chitsano is thinking…
+            <Loader2 className="h-4 w-4 animate-spin" /> Chitsano is checking…
           </div>
         )}
       </div>

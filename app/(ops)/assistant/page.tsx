@@ -1,13 +1,11 @@
 import { Sparkles } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { chitsanoConfigured } from "@/lib/chitsano/agent";
 import { ChitsanoChat } from "@/components/ops/ChitsanoChat";
 
 export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
   await requireRole("fleet_manager", "admin");
-  const configured = chitsanoConfigured();
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 lg:px-8 lg:py-8 space-y-5">
@@ -19,12 +17,12 @@ export default async function AssistantPage() {
           </span>
           <div>
             <h1 className="text-2xl font-extrabold text-white">Chitsano AI</h1>
-            <p className="text-sm text-slate-300">Your fleet assistant — answers from live data, and can act with your say-so.</p>
+            <p className="text-sm text-slate-300">Your built-in fleet assistant — answers from live data, and can act with your say-so.</p>
           </div>
         </div>
       </div>
 
-      <ChitsanoChat configured={configured} />
+      <ChitsanoChat />
     </div>
   );
 }

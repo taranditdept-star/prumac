@@ -16,7 +16,6 @@
     "db:reset": "supabase db reset"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
     "@base-ui/react": "^1.5.0",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/auth-helpers-nextjs": "^0.15.0",

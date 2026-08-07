@@ -57,3 +57,80 @@ export async function getLoginActivity(): Promise<LoginActivity> {
     summary: { total: rows.length, active: count("active"), idle: count("idle"), dormant: count("dormant"), never: count("never") },
   };
 }
+
+// ── Per-person drill-down ────────────────────────────────────────────────────
+export interface LoginDetailTrip {
+  date: string | null;
+  plate: string;
+  km: number | null;
+  purpose: string;
+  status: string;
+  route: string;
+}
+export interface LoginDetail {
+  isDriver: boolean;
+  phone: string | null;
+  email: string | null;
+  checkedInToday: boolean;
+  vehicle: { plate: string; make: string; model: string } | null;
+  trips: LoginDetailTrip[];
+  trips30d: number;
+}
+
+/** Deep detail for one account — their vehicle, recent trips and today's check-in. */
+export async function getLoginDetail(profileId: string): Promise<LoginDetail> {
+  const sb = createServiceClient();
+  const app = sb.schema("app");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Harare" });
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+
+  const [{ data: profile }, { data: driver }, { data: att }] = await Promise.all([
+    app.from("profiles").select("phone, email").eq("id", profileId).maybeSingle<{ phone: string | null; email: string | null }>(),
+    app.from("drivers").select("id").eq("profile_id", profileId).maybeSingle<{ id: string }>(),
+    app.from("attendance").select("profile_id").eq("profile_id", profileId).eq("attendance_date", today).maybeSingle<{ profile_id: string }>(),
+  ]);
+
+  const base: LoginDetail = {
+    isDriver: !!driver,
+    phone: profile?.phone ?? null,
+    email: profile?.email ?? null,
+    checkedInToday: !!att,
+    vehicle: null,
+    trips: [],
+    trips30d: 0,
+  };
+  if (!driver) return base;
+
+  const [{ data: assign }, { data: trips }, { count }] = await Promise.all([
+    app
+      .from("vehicle_assignments")
+      .select("vehicles(plate_number, make, model)")
+      .eq("driver_id", driver.id)
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ vehicles: { plate_number: string; make: string; model: string } | null }>(),
+    app
+      .from("trips")
+      .select("started_at, purpose, status, start_odometer_km, end_odometer_km, route_description, origin_label, destination_label, vehicles(plate_number)")
+      .eq("driver_id", driver.id)
+      .order("started_at", { ascending: false })
+      .limit(6)
+      .returns<
+        { started_at: string | null; purpose: string; status: string; start_odometer_km: number | null; end_odometer_km: number | null; route_description: string | null; origin_label: string | null; destination_label: string | null; vehicles: { plate_number: string } | null }[]
+      >(),
+    app.from("trips").select("id", { count: "exact", head: true }).eq("driver_id", driver.id).gte("started_at", since),
+  ]);
+
+  base.vehicle = assign?.vehicles ? { plate: assign.vehicles.plate_number, make: assign.vehicles.make, model: assign.vehicles.model } : null;
+  base.trips30d = count ?? 0;
+  base.trips = (trips ?? []).map((t) => ({
+    date: t.started_at,
+    plate: t.vehicles?.plate_number ?? "—",
+    km: t.start_odometer_km != null && t.end_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null,
+    purpose: t.purpose,
+    status: t.status,
+    route: t.route_description ?? [t.origin_label, t.destination_label].filter(Boolean).join(" → ") ?? "",
+  }));
+  return base;
+}
