@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle2, AlertCircle, XCircle, ClipboardCheck, ChevronRight } from "lucide-react";
+import {
+  CheckCircle2, AlertCircle, XCircle, ClipboardCheck, ChevronRight, ChevronLeft, Check, Circle,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { submitStandaloneInspection } from "@/actions/inspections";
@@ -26,11 +28,7 @@ interface VehicleChecklistProps {
 }
 
 type Result = "pass" | "attention" | "fail";
-
-interface ItemState {
-  result: Result | null;
-  notes: string;
-}
+const REVIEW = -1;
 
 export function VehicleChecklist({
   vehicleId,
@@ -43,51 +41,87 @@ export function VehicleChecklist({
   const [isPending, startTransition] = useTransition();
   const [odometer, setOdometer] = useState<string>(String(currentOdometer));
   const [notes, setNotes] = useState("");
-  const [state, setState] = useState<Record<string, ItemState>>(() =>
-    Object.fromEntries(items.map((i) => [i.id, { result: null, notes: "" }])),
+  const [results, setResults] = useState<Record<string, Result>>(() =>
+    Object.fromEntries(items.map((i) => [i.id, "pass" as Result])),
   );
+  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
 
-  const grouped = useMemo(() => {
+  // Sections in template order.
+  const sections = useMemo(() => {
     const map = new Map<string, ChecklistItem[]>();
     for (const it of items) {
       if (!map.has(it.category)) map.set(it.category, []);
       map.get(it.category)!.push(it);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).map(([category, group]) => ({ category, group }));
   }, [items]);
 
+  const [confirmed, setConfirmed] = useState<boolean[]>(() => sections.map(() => false));
+  const [open, setOpen] = useState(0); // section index, or REVIEW
+
+  const confirmedCount = confirmed.filter(Boolean).length;
+  const allConfirmed = confirmedCount === sections.length && sections.length > 0;
+
   const totals = useMemo(() => {
-    const vals = Object.values(state);
+    const vals = Object.values(results);
     return {
-      pass: vals.filter((v) => v.result === "pass").length,
-      attention: vals.filter((v) => v.result === "attention").length,
-      fail: vals.filter((v) => v.result === "fail").length,
-      pending: vals.filter((v) => v.result === null).length,
+      attention: vals.filter((v) => v === "attention").length,
+      fail: vals.filter((v) => v === "fail").length,
     };
-  }, [state]);
+  }, [results]);
 
-  // Live condition rating mirrors the paper form's Good / Attention / Critical
-  const rating: { label: string; tone: "emerald" | "amber" | "rose" } = useMemo(() => {
-    if (totals.fail > 0) return { label: "CRITICAL — immediate repairs", tone: "rose" };
-    if (totals.attention > 0) return { label: "ATTENTION — minor repairs", tone: "amber" };
-    return { label: "GOOD — roadworthy", tone: "emerald" };
-  }, [totals]);
+  const rating: { label: string; tone: Tone } =
+    totals.fail > 0
+      ? { label: "Critical — needs repair", tone: "rose" }
+      : totals.attention > 0
+        ? { label: "Attention — minor issues", tone: "amber" }
+        : { label: "Good — roadworthy", tone: "emerald" };
 
-  const blockingFails = items.filter(
-    (i) => i.is_critical && state[i.id]?.result === "fail",
-  );
+  const blockingFails = items.filter((i) => i.is_critical && results[i.id] === "fail");
 
-  function setItem(id: string, patch: Partial<ItemState>) {
-    setState((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  function sectionResult(idx: number): Result {
+    const g = sections[idx].group;
+    if (g.some((it) => results[it.id] === "fail")) return "fail";
+    if (g.some((it) => results[it.id] === "attention")) return "attention";
+    return "pass";
+  }
+
+  function cycle(id: string) {
+    setResults((prev) => {
+      const next: Result = prev[id] === "pass" ? "attention" : prev[id] === "attention" ? "fail" : "pass";
+      return { ...prev, [id]: next };
+    });
+  }
+
+  function advanceFrom(idx: number) {
+    const next = [...confirmed];
+    next[idx] = true;
+    setConfirmed(next);
+    const upcoming = next.findIndex((c) => !c);
+    setOpen(upcoming === -1 ? REVIEW : upcoming);
+  }
+
+  function allGood(idx: number) {
+    const g = sections[idx].group;
+    setResults((prev) => {
+      const copy = { ...prev };
+      for (const it of g) copy[it.id] = "pass";
+      return copy;
+    });
+    setItemNotes((prev) => {
+      const copy = { ...prev };
+      for (const it of g) delete copy[it.id];
+      return copy;
+    });
+    advanceFrom(idx);
   }
 
   function handleSubmit() {
     const itemsPayload = items.map((i) => ({
       checklist_item_id: i.id,
-      result: state[i.id]?.result ?? "pass",
-      notes: state[i.id]?.notes || undefined,
+      result: results[i.id] ?? "pass",
+      notes: itemNotes[i.id] || undefined,
     }));
-
     startTransition(async () => {
       const result = await submitStandaloneInspection({
         vehicle_id: vehicleId,
@@ -100,205 +134,270 @@ export function VehicleChecklist({
         toast.error(result.error);
       } else {
         const overall = result.data?.overall_result ?? "pass";
-        if (overall === "fail") {
-          toast.error("Checklist saved — critical issues found");
-        } else if (overall === "attention") {
-          toast.warning("Checklist saved — items need attention");
-        } else {
-          toast.success("Checklist saved — vehicle roadworthy");
-        }
+        if (overall === "fail") toast.error("Checklist saved — critical issues found");
+        else if (overall === "attention") toast.warning("Checklist saved — items need attention");
+        else toast.success("Checklist saved — vehicle roadworthy");
         router.push("/home");
         router.refresh();
       }
     });
   }
 
-  const ratingTone = {
-    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    amber: "bg-amber-50 text-amber-700 border-amber-200",
-    rose: "bg-rose-50 text-rose-700 border-rose-200",
-  }[rating.tone];
-
   return (
-    <div className="space-y-5">
-      {/* Progress strip + live condition rating */}
-      <div className="rounded-2xl bg-white border border-ink-200/70 p-4 sticky top-2 z-10 shadow-sm">
-        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-400 font-bold">
-          {templateName}
-        </p>
-        <div className="mt-2 flex items-center gap-3 flex-wrap">
-          <Chip n={totals.pass} label="Pass" tone="emerald" />
-          <Chip n={totals.attention} label="Attention" tone="amber" />
-          <Chip n={totals.fail} label="Fail" tone="rose" />
-          {totals.pending > 0 && <Chip n={totals.pending} label="Pending" tone="ink" />}
+    <div className="space-y-4">
+      {/* Sticky progress + condition */}
+      <div className="sticky top-2 z-10 rounded-2xl border border-ink-200/70 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">{templateName}</p>
+          <p className="text-xs font-bold tabular text-ink-500">
+            {confirmedCount} <span className="text-ink-400">of</span> {sections.length} sections
+          </p>
         </div>
-        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-bold ${ratingTone}`}>
-          Condition rating: {rating.label}
+        <div className="mt-2.5 flex items-center gap-1.5">
+          {sections.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 flex-1 rounded-full ${
+                confirmed[i]
+                  ? { pass: "bg-emerald-500", attention: "bg-amber-500", fail: "bg-rose-500" }[sectionResult(i)]
+                  : open === i
+                    ? "bg-orange-500"
+                    : "bg-ink-200"
+              }`}
+            />
+          ))}
+        </div>
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-bold ${ratingCls(rating.tone)}`}>
+          Condition: {rating.label}
         </div>
         {blockingFails.length > 0 && (
-          <div className="mt-3 rounded-xl bg-rose-50 border border-rose-200 p-2.5 flex items-start gap-2">
-            <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5">
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
             <p className="text-xs text-rose-700">
-              {blockingFails.length} critical item{blockingFails.length !== 1 ? "s" : ""} failed.
-              Vehicle is unsafe to drive — alert your fleet manager before using it.
+              {blockingFails.length} critical item{blockingFails.length !== 1 ? "s" : ""} failed — the vehicle is unsafe to
+              drive. Alert your fleet manager before using it.
             </p>
           </div>
+        )}
+        {allConfirmed && open !== REVIEW && (
+          <button
+            type="button"
+            onClick={() => setOpen(REVIEW)}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ink-900 py-2.5 text-sm font-bold text-white"
+          >
+            Review &amp; submit <ChevronRight className="h-4 w-4" />
+          </button>
         )}
       </div>
 
       {/* Odometer */}
-      <div className="rounded-2xl bg-white border border-ink-200/70 p-4">
-        <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
-          Current mileage (km)
-        </Label>
+      <div className="rounded-2xl border border-ink-200/70 bg-white p-4">
+        <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">Current mileage (km)</Label>
         <Input
           type="number"
           inputMode="numeric"
           value={odometer}
           onChange={(e) => setOdometer(e.target.value)}
-          className="h-14 mt-2 text-2xl font-plate font-bold tabular text-center"
+          className="mt-2 h-14 text-center text-2xl font-plate font-bold tabular"
         />
       </div>
 
-      {/* Grouped items */}
-      <div className="space-y-4">
-        {grouped.map(([category, group]) => (
-          <div key={category} className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden">
-            <p className="px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-ink-400 font-bold bg-ink-50 border-b border-ink-100">
-              {category}
-            </p>
-            <ul className="divide-y divide-ink-100">
-              {group.map((it) => {
-                const cur = state[it.id];
-                return (
-                  <li key={it.id} className="p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-ink-900">
-                          {it.label}
-                          {it.is_critical && (
-                            <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-rose-600">
-                              CRITICAL
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <ResultBtn
-                        active={cur?.result === "pass"}
-                        onClick={() => setItem(it.id, { result: "pass" })}
-                        tone="emerald"
-                        icon={CheckCircle2}
-                        label="Pass"
-                      />
-                      <ResultBtn
-                        active={cur?.result === "attention"}
-                        onClick={() => setItem(it.id, { result: "attention" })}
-                        tone="amber"
-                        icon={AlertCircle}
-                        label="Attention"
-                      />
-                      <ResultBtn
-                        active={cur?.result === "fail"}
-                        onClick={() => setItem(it.id, { result: "fail" })}
-                        tone="rose"
-                        icon={XCircle}
-                        label="Fail"
-                      />
-                    </div>
-
-                    {(cur?.result === "attention" || cur?.result === "fail") && (
-                      <textarea
-                        value={cur.notes}
-                        onChange={(e) => setItem(it.id, { notes: e.target.value })}
-                        placeholder="Comments — what's wrong?"
-                        rows={2}
-                        className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+      {/* Review screen */}
+      {open === REVIEW ? (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-ink-200/70 bg-white p-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Almost done</p>
+            <p className="mt-1 text-lg font-bold text-ink-900">Review &amp; submit</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Tally n={items.length - totals.attention - totals.fail} label="OK" tone="emerald" />
+              {totals.attention > 0 && <Tally n={totals.attention} label="Attention" tone="amber" />}
+              {totals.fail > 0 && <Tally n={totals.fail} label="Fail" tone="rose" />}
+            </div>
+            <div className="mt-4">
+              <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
+                Defects &amp; notes for the manager
+              </Label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Anything the fleet manager should know"
+                className="mt-2 w-full resize-none rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Defects / overall notes */}
-      <div className="rounded-2xl bg-white border border-ink-200/70 p-4">
-        <Label className="text-xs font-bold uppercase tracking-[0.1em] text-ink-500">
-          Defects found & repair recommendations
-        </Label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Anything the fleet manager should know"
-          className="mt-2 w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
-        />
-      </div>
-
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-base inline-flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 transition-all disabled:opacity-50"
-      >
-        <ClipboardCheck className="h-5 w-5" />
-        {isPending ? "Submitting…" : "Submit checklist"}
-        <ChevronRight className="h-5 w-5" />
-      </button>
+          <button
+            type="button"
+            onClick={() => setOpen(0)}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900"
+          >
+            <ChevronLeft className="h-4 w-4" /> Back to checks
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isPending}
+            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:bg-orange-600 disabled:opacity-50"
+          >
+            <ClipboardCheck className="h-5 w-5" />
+            {isPending ? "Submitting…" : "Submit checklist"}
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      ) : (
+        /* Sections */
+        <div className="space-y-2.5">
+          {sections.map((sec, i) => {
+            const isOpen = open === i;
+            const done = confirmed[i];
+            if (isOpen) {
+              const flagged = sec.group.filter((it) => results[it.id] !== "pass");
+              const isLast = i === sections.length - 1;
+              return (
+                <div key={sec.category} className="rounded-2xl border-2 border-orange-400 bg-white p-4">
+                  <h3 className="text-base font-bold text-ink-900">{sec.category}</h3>
+                  <p className="mb-3 text-xs text-ink-500">
+                    {sec.group.length} check{sec.group.length !== 1 ? "s" : ""} — tap any that&rsquo;s a problem, or mark all good.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => allGood(i)}
+                    className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-bold text-white transition-all hover:bg-emerald-600 active:scale-[0.99]"
+                  >
+                    <CheckCircle2 className="h-5 w-5" /> All good here
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {sec.group.map((it) => (
+                      <ItemChip key={it.id} item={it} result={results[it.id]} onClick={() => cycle(it.id)} />
+                    ))}
+                  </div>
+                  {flagged.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {flagged.map((it) => (
+                        <input
+                          key={it.id}
+                          value={itemNotes[it.id] ?? ""}
+                          onChange={(e) => setItemNotes((p) => ({ ...p, [it.id]: e.target.value }))}
+                          placeholder={`${it.label} — what's wrong?`}
+                          className={`w-full rounded-xl border bg-white px-3 py-2 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 ${
+                            results[it.id] === "fail"
+                              ? "border-rose-200 focus:ring-rose-500/30"
+                              : "border-amber-200 focus:ring-amber-500/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => advanceFrom(i)}
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-600 hover:text-orange-700"
+                    >
+                      {isLast ? "Review & submit" : "Next section"} <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            // Collapsed: done summary, or pending row
+            const res = done ? sectionResult(i) : null;
+            return (
+              <button
+                key={sec.category}
+                type="button"
+                onClick={() => setOpen(i)}
+                className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
+                  done ? "border-ink-200/70 bg-white" : "border-ink-200/60 bg-ink-50/40"
+                }`}
+              >
+                {done ? (
+                  <SectionTick result={res!} />
+                ) : (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-bold text-ink-400">
+                    {i + 1}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-ink-900">{sec.category}</span>
+                  <span className="block text-xs text-ink-400">
+                    {done ? sectionSummary(sec.group, results) : `${sec.group.length} checks`}
+                  </span>
+                </span>
+                {done ? (
+                  <span className="text-xs font-semibold text-ink-400">Edit</span>
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function ResultBtn({
-  active,
-  onClick,
-  tone,
-  icon: Icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  tone: "emerald" | "amber" | "rose";
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-}) {
-  const toneMap = {
-    emerald: { bg: "bg-emerald-500", text: "text-white", borderActive: "border-emerald-500", inactiveText: "text-emerald-700", inactiveBorder: "border-emerald-200", inactiveBg: "bg-emerald-50" },
-    amber: { bg: "bg-amber-500", text: "text-white", borderActive: "border-amber-500", inactiveText: "text-amber-700", inactiveBorder: "border-amber-200", inactiveBg: "bg-amber-50" },
-    rose: { bg: "bg-rose-500", text: "text-white", borderActive: "border-rose-500", inactiveText: "text-rose-700", inactiveBorder: "border-rose-200", inactiveBg: "bg-rose-50" },
-  }[tone];
+type Tone = "emerald" | "amber" | "rose";
+
+function ItemChip({ item, result, onClick }: { item: ChecklistItem; result: Result; onClick: () => void }) {
+  const cls =
+    result === "fail"
+      ? "border-rose-300 bg-rose-50 text-rose-700"
+      : result === "attention"
+        ? "border-amber-300 bg-amber-50 text-amber-700"
+        : "border-ink-200 bg-white text-ink-700";
+  const Icon = result === "fail" ? XCircle : result === "attention" ? AlertCircle : Circle;
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`h-11 rounded-xl border-2 flex items-center justify-center gap-1.5 text-xs font-bold transition-all ${
-        active
-          ? `${toneMap.bg} ${toneMap.text} ${toneMap.borderActive}`
-          : `${toneMap.inactiveBg} ${toneMap.inactiveText} ${toneMap.inactiveBorder} hover:opacity-80`
-      }`}
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[13px] font-medium transition-all active:scale-[0.98] ${cls}`}
     >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
+      <Icon className={`h-3.5 w-3.5 ${result === "pass" ? "text-ink-300" : ""}`} />
+      {item.label}
+      {item.is_critical && <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />}
     </button>
   );
 }
 
-function Chip({ n, label, tone }: { n: number; label: string; tone: "emerald" | "amber" | "rose" | "ink" }) {
-  const t = {
-    emerald: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-    amber: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
-    rose: { bg: "bg-rose-50", text: "text-rose-700", dot: "bg-rose-500" },
-    ink: { bg: "bg-ink-100", text: "text-ink-600", dot: "bg-ink-400" },
-  }[tone];
+function SectionTick({ result }: { result: Result }) {
+  if (result === "pass")
+    return (
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <Check className="h-4 w-4" strokeWidth={3} />
+      </span>
+    );
+  const cls = result === "fail" ? "bg-rose-500" : "bg-amber-500";
+  const Icon = result === "fail" ? XCircle : AlertCircle;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-lg ${t.bg} px-2 py-1 text-xs font-semibold ${t.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
-      {n} {label}
+    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white ${cls}`}>
+      <Icon className="h-4 w-4" />
     </span>
   );
+}
+
+function sectionSummary(group: ChecklistItem[], results: Record<string, Result>): string {
+  const fail = group.filter((it) => results[it.id] === "fail").length;
+  const att = group.filter((it) => results[it.id] === "attention").length;
+  if (fail > 0) return `${fail} failed${att > 0 ? `, ${att} attention` : ""}`;
+  if (att > 0) return `${att} need attention`;
+  return "All OK";
+}
+
+function Tally({ n, label, tone }: { n: number; label: string; tone: Tone }) {
+  const t = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    rose: "bg-rose-50 text-rose-700",
+  }[tone];
+  return <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${t}`}>{n} {label}</span>;
+}
+
+function ratingCls(tone: Tone): string {
+  return {
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-200",
+    rose: "bg-rose-50 text-rose-700 border-rose-200",
+  }[tone];
 }
