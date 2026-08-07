@@ -2,6 +2,7 @@ import { UserCog } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { UserManagement, type AccountRow } from "@/components/ops/UserManagement";
+import { ExportLoginsButton } from "@/components/ops/ExportLoginsButton";
 import type { AppRole } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,8 @@ export default async function UsersAdminPage() {
           </div>
         </div>
       </div>
+
+      <ExportLoginsButton />
 
       <UserManagement accounts={accounts} subsidiaries={subs ?? []} />
     </div>
