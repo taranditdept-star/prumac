@@ -1,31 +1,28 @@
 import Link from "next/link";
-import { Users, Plus, ArrowUpRight, IdCard } from "lucide-react";
+import { Users, Plus, IdCard } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { ExpiryBadge } from "@/components/primitives/ExpiryBadge";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { ListSearchInput } from "@/components/ops/ListSearchInput";
+import { DriverRowActions } from "@/components/ops/DriverRowActions";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
-import type { CountryCode } from "@/types/domain";
+import type { CountryCode, DriverRow } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-interface DriverWithJoins {
-  id: string;
-  employee_number: string | null;
-  licence_number: string;
-  licence_country: CountryCode;
-  licence_classes: string[];
-  licence_expires_at: string | null;
-  is_active: boolean;
-  created_at: string;
+// The full drivers row (select *) so the inline edit drawer can't blank fields
+// updateDriver rewrites — plus the joined profile and current assignment.
+interface DriverWithJoins extends DriverRow {
   profiles: {
     full_name: string | null;
     phone: string | null;
     avatar_url: string | null;
     subsidiary_id: string | null;
+    access_status: "active" | "suspended" | "deactivated" | null;
   } | null;
   vehicle_assignments: {
+    id: string;
     vehicle_id: string;
     ended_at: string | null;
     vehicles: {
@@ -68,7 +65,8 @@ export default async function DriversPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  await requireRole("fleet_manager", "admin");
+  const profile = await requireRole("fleet_manager", "admin");
+  const isAdmin = profile.role === "admin";
   const { q: qRaw } = await searchParams;
   const q = (qRaw ?? "").trim().toLowerCase();
   const supabase = await createClient();
@@ -77,16 +75,9 @@ export default async function DriversPage({
     .schema("app")
     .from("drivers")
     .select(`
-      id,
-      employee_number,
-      licence_number,
-      licence_country,
-      licence_classes,
-      licence_expires_at,
-      is_active,
-      created_at,
-      profiles!inner(full_name, phone, avatar_url, subsidiary_id),
-      vehicle_assignments(vehicle_id, ended_at, vehicles(plate_number, plate_country, make, model))
+      *,
+      profiles!inner(full_name, phone, avatar_url, subsidiary_id, access_status),
+      vehicle_assignments(id, vehicle_id, ended_at, vehicles(plate_number, plate_country, make, model))
     `)
     .eq("is_active", true)
     .order("created_at", { ascending: false })
@@ -101,6 +92,29 @@ export default async function DriversPage({
       </div>
     );
   }
+
+  // Option lists for the row actions (assign vehicle / edit driver).
+  const [{ data: vehicleRows }, { data: subsidiaries }, { data: openAssignments }] = await Promise.all([
+    supabase
+      .schema("app")
+      .from("vehicles")
+      .select("id, plate_number, make, model")
+      .neq("status", "decommissioned")
+      .order("plate_number")
+      .returns<{ id: string; plate_number: string; make: string; model: string }[]>(),
+    supabase.schema("app").from("subsidiaries").select("id, name").order("name").returns<{ id: string; name: string }[]>(),
+    supabase
+      .schema("app")
+      .from("vehicle_assignments")
+      .select("vehicle_id, drivers(profiles(full_name))")
+      .is("ended_at", null)
+      .returns<{ vehicle_id: string; drivers: { profiles: { full_name: string | null } | null } | null }[]>(),
+  ]);
+
+  const holderByVehicle = new Map(
+    (openAssignments ?? []).map((a) => [a.vehicle_id, a.drivers?.profiles?.full_name ?? null]),
+  );
+  const vehicleOptions = (vehicleRows ?? []).map((v) => ({ ...v, holder: holderByVehicle.get(v.id) ?? null }));
 
   const list = drivers ?? [];
   // Keep only CURRENT assignments (ended_at IS NULL) — the embed returns
@@ -216,13 +230,47 @@ export default async function DriversPage({
             const currentAssignment = d.vehicle_assignments?.find((a) => a.vehicles) ?? null;
             const vehicle = currentAssignment?.vehicles;
 
+            const suspended = d.profiles?.access_status === "suspended";
+            const blocked = !d.is_active || d.profiles?.access_status === "deactivated";
+
             return (
-              <Link
+              // The card is a div (not a Link) so the actions menu can live inside
+              // it — nesting buttons in an anchor is invalid and swallows clicks.
+              // A stretched overlay link keeps the whole card clickable.
+              <div
                 key={d.id}
-                href={`/drivers/${d.id}`}
-                className="group relative rounded-2xl bg-white border border-ink-200/70 p-5 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+                className="group relative rounded-2xl bg-white border border-ink-200/70 p-5 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-200"
               >
-                <div className="flex items-start gap-3">
+                <Link
+                  href={`/drivers/${d.id}`}
+                  aria-label={`Open ${name}`}
+                  className="absolute inset-0 z-10 rounded-2xl"
+                />
+                <div className="absolute right-3 top-3 z-20">
+                  <DriverRowActions
+                    driver={d}
+                    driverName={name}
+                    profileId={d.profile_id}
+                    accessStatus={d.profiles?.access_status ?? "active"}
+                    currentAssignmentId={currentAssignment?.id ?? null}
+                    currentVehicleLabel={currentAssignment?.vehicles?.plate_number ?? null}
+                    vehicles={vehicleOptions}
+                    subsidiaries={subsidiaries ?? []}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+
+                {(suspended || blocked) && (
+                  <span
+                    className={`absolute left-5 top-0 -translate-y-1/2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                      suspended ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
+                    }`}
+                  >
+                    {suspended ? "Suspended" : "Deactivated"}
+                  </span>
+                )}
+
+                <div className="flex items-start gap-3 pr-9">
                   <div
                     className={`h-12 w-12 rounded-xl bg-gradient-to-br ${gradientFromName(name)} flex items-center justify-center text-white text-sm font-bold shrink-0 ring-2 ring-white shadow-md`}
                   >
@@ -239,7 +287,6 @@ export default async function DriversPage({
                       </p>
                     )}
                   </div>
-                  <ArrowUpRight className="h-4 w-4 text-ink-300 group-hover:text-orange-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-ink-100 flex items-center gap-2">
@@ -286,7 +333,7 @@ export default async function DriversPage({
                     <p className="text-xs text-ink-400 italic">No vehicle assigned</p>
                   )}
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>
