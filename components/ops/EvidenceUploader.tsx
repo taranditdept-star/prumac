@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { Upload, Loader2, RotateCw, X, FileText, Film, Mic, ImageIcon, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { attachAccidentMedia } from "@/actions/accident-evidence";
+import { VoiceRecorder } from "@/components/ops/VoiceRecorder";
 import {
-  EVIDENCE_BUCKET, ACCEPT_ATTR, MAX_UPLOAD_BYTES, humanSize, kindForMime, rejectReason, type MediaKind,
+  EVIDENCE_BUCKET, ACCEPT_ATTR, ACCEPT_MEDIA, ACCEPT_AUDIO, ACCEPT_DOCS,
+  MAX_UPLOAD_BYTES, humanSize, kindForMime, contentTypeFor, rejectReason, type MediaKind,
 } from "@/lib/evidence/limits";
 
 interface Job {
@@ -50,7 +52,9 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [source, setSource] = useState("committee");
   const [sourceDetail, setSourceDetail] = useState("");
+  const [recording, setRecording] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const accept = useRef<string>(ACCEPT_ATTR);
   const sb = useRef(createClient());
   // Read inside the upload callback so a mid-batch change doesn't retro-tag.
   const attribution = useRef({ source, sourceDetail });
@@ -61,13 +65,15 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
 
   const uploadOne = useCallback(
     async (file: File, id: string) => {
-      const kind = kindForMime(file.type) ?? "document";
       try {
         const ext = (file.name.split(".").pop() || "bin").toLowerCase().slice(0, 8);
         const path = `accident/${accidentId}/${crypto.randomUUID()}.${ext}`;
+        // Derive the content type when the browser reports none (common for
+        // .opus/.amr on Windows) — otherwise Storage refuses the object.
+        const contentType = contentTypeFor(file);
         const { error: upErr } = await sb.current.storage
           .from(EVIDENCE_BUCKET)
-          .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+          .upload(path, file, { contentType, upsert: false });
         if (upErr) {
           // Storage speaks plainly here: mime rejections and size rejections both
           // arrive as messages worth showing the operator.
@@ -80,7 +86,7 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
           accident_id: accidentId,
           file_path: path,
           original_filename: file.name,
-          mime_type: file.type || "application/octet-stream",
+          mime_type: contentType,
           size_bytes: file.size,
           source: attribution.current.source,
           source_detail: attribution.current.sourceDetail,
@@ -107,7 +113,7 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
           continue;
         }
         const id = crypto.randomUUID();
-        const kind = kindForMime(file.type) ?? "document";
+        const kind = kindForMime(file.type, file.name) ?? "document";
         setJobs((prev) => [...prev, { id, name: file.name, size: file.size, kind, status: "uploading", file }]);
         void uploadOne(file, id);
       }
@@ -160,24 +166,56 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
         </div>
         <p className="text-sm font-semibold text-ink-900">Add photos, video, audio or documents</p>
         <p className="mx-auto mt-1 max-w-md text-xs text-ink-500">
-          Drag files here or choose them below. Up to {humanSize(MAX_UPLOAD_BYTES)} per file — a long recording may need
+          Drag files here or pick a type below. Up to {humanSize(MAX_UPLOAD_BYTES)} per file — a long recording may need
           splitting.
         </p>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600"
-        >
-          <Upload className="h-4 w-4" /> Choose files
-        </button>
+
+        {/* Separate pickers per type: a single generic button hid the fact that
+            audio was supported, and a MIME-only filter greyed out voice notes. */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <PickBtn
+            icon={<ImageIcon className="h-4 w-4" />}
+            label="Photos / video"
+            onClick={() => {
+              accept.current = ACCEPT_MEDIA;
+              inputRef.current?.click();
+            }}
+          />
+          <PickBtn
+            icon={<Mic className="h-4 w-4" />}
+            label="Audio file"
+            hint="incl. WhatsApp voice notes"
+            onClick={() => {
+              accept.current = ACCEPT_AUDIO;
+              inputRef.current?.click();
+            }}
+          />
+          <PickBtn
+            icon={<FileText className="h-4 w-4" />}
+            label="Document"
+            onClick={() => {
+              accept.current = ACCEPT_DOCS;
+              inputRef.current?.click();
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setRecording(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-bold text-white hover:bg-violet-700"
+          >
+            <Mic className="h-4 w-4" /> Record now
+          </button>
+        </div>
+
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPT_ATTR}
+          accept={accept.current}
           multiple
           onChange={(e) => {
             const picked = Array.from(e.target.files ?? []);
             e.target.value = "";
+            accept.current = ACCEPT_ATTR;
             add(picked);
           }}
           className="sr-only"
@@ -245,7 +283,31 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
         </ul>
       )}
 
+      {recording && (
+        <VoiceRecorder onRecorded={(file) => add([file])} onClose={() => setRecording(false)} />
+      )}
+
       {busy && <p className="text-xs text-ink-400">Keep this page open until every file says &ldquo;attached&rdquo;.</p>}
     </div>
+  );
+}
+
+function PickBtn({
+  icon, label, hint, onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-10 items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 text-sm font-semibold text-ink-800 hover:border-orange-300 hover:text-orange-700"
+    >
+      {icon} {label}
+      {hint && <span className="hidden text-[10px] font-normal text-ink-400 sm:inline">{hint}</span>}
+    </button>
   );
 }
