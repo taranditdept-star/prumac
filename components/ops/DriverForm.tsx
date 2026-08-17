@@ -17,12 +17,14 @@ interface SubsidiaryOption {
 
 interface DriverFormProps {
   driver?: DriverRow & { profile?: { full_name: string | null; phone: string | null; subsidiary_id: string | null } };
+  /** Called after a successful save — lets a containing drawer close itself. */
+  onSaved?: () => void;
   // Deprecated & ignored — drivers don't belong to a subsidiary (DB constraint).
   // Kept optional so existing callers still type-check.
   subsidiaries?: SubsidiaryOption[];
 }
 
-export function DriverForm({ driver }: DriverFormProps) {
+export function DriverForm({ driver, onSaved }: DriverFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [classes, setClasses] = useState<string[]>(driver?.licence_classes ?? []);
@@ -55,6 +57,7 @@ export function DriverForm({ driver }: DriverFormProps) {
         } else if (result && "success" in result) {
           toast.success("Driver saved");
           router.refresh();
+          onSaved?.();
         }
       } catch (err) {
         if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) {

@@ -46,7 +46,7 @@ export function RowMenu({
   ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,11 +56,19 @@ export function RowMenu({
   const place = useCallback(() => {
     const b = btnRef.current?.getBoundingClientRect();
     if (!b) return;
-    const estH = Math.min(actions.length * 44 + 12, 420);
-    const below = window.innerHeight - b.bottom;
-    const top = below < estH + 12 && b.top > estH + 12 ? b.top - estH - 6 : b.bottom + 6;
-    const left = Math.max(8, Math.min(b.right - MENU_W, window.innerWidth - MENU_W - 8));
-    setPos({ top, left });
+    const GAP = 6;
+    const MARGIN = 8;
+    const estH = Math.min(actions.length * 46 + 12, 420);
+    const spaceBelow = window.innerHeight - b.bottom - GAP - MARGIN;
+    const spaceAbove = b.top - GAP - MARGIN;
+    // Open on whichever side has more room, then CLAMP into the viewport and cap
+    // the height so a long menu near the bottom can never run off-screen.
+    const openUp = spaceBelow < estH && spaceAbove > spaceBelow;
+    const maxH = Math.max(140, Math.min(estH, openUp ? spaceAbove : spaceBelow));
+    const rawTop = openUp ? b.top - maxH - GAP : b.bottom + GAP;
+    const top = Math.max(MARGIN, Math.min(rawTop, window.innerHeight - maxH - MARGIN));
+    const left = Math.max(MARGIN, Math.min(b.right - MENU_W, window.innerWidth - MENU_W - MARGIN));
+    setPos({ top, left, maxH });
   }, [actions.length]);
 
   useLayoutEffect(() => {
@@ -70,23 +78,47 @@ export function RowMenu({
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
+    const items = () =>
+      Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? []);
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        close();
+        btnRef.current?.focus();
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const list = items();
+      if (list.length === 0) return;
+      e.preventDefault();
+      const at = list.indexOf(document.activeElement as HTMLElement);
+      const next = e.key === "ArrowDown" ? (at + 1) % list.length : (at <= 0 ? list.length : at) - 1;
+      list[next]?.focus();
     };
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
       close();
     };
+    // capture:true so it also fires for the scrolling table container — but a
+    // scroll INSIDE the menu (a long, capped menu) must not close it.
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      close();
+    };
+
+    // Move focus into the menu so it's keyboard-operable, not just mouse-only.
+    const raf = requestAnimationFrame(() => items()[0]?.focus());
+
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onDown);
-    // capture:true so it also fires for the scrolling table container
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", close);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", close);
     };
   }, [open]);
@@ -119,8 +151,8 @@ export function RowMenu({
             <div
               ref={menuRef}
               role="menu"
-              style={{ top: pos.top, left: pos.left, width: MENU_W }}
-              className="fixed z-[70] overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-2xl"
+              style={{ top: pos.top, left: pos.left, width: MENU_W, maxHeight: pos.maxH }}
+              className="fixed z-[70] overflow-y-auto overscroll-contain rounded-xl border border-ink-200 bg-white py-1 shadow-2xl"
             >
               {visible.map((a) => {
                 const cls = `flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium transition-colors ${

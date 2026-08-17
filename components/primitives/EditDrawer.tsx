@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
@@ -21,6 +22,9 @@ export function EditDrawer({
   children,
   widthClass = "w-full max-w-2xl",
 }: EditDrawerProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Close on Escape
   useEffect(() => {
     if (!open) return;
@@ -35,7 +39,13 @@ export function EditDrawer({
     };
   }, [open, onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  // Rendered in a PORTAL: callers mount this inside cards/rows that create their
+  // own stacking context (z-indexed wrappers) or carry a hover transform, either
+  // of which would trap a plain `fixed` drawer inside the card and hide it under
+  // the top bar. Portaling to <body> keeps it a true full-screen overlay.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -75,6 +85,7 @@ export function EditDrawer({
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

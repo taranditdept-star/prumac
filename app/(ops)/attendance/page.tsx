@@ -97,11 +97,10 @@ export default async function AttendancePage({
 
   const markByProfile = new Map((marks ?? []).map((m) => [m.profile_id, m]));
   const driverByProfile = new Map((driverRows ?? []).map((d) => [d.profile_id, d.id]));
-  // Newest session per person (the list is already ordered login_at DESC).
-  const lastLoginByProfile = new Map<string, string>();
-  for (const s of sessions ?? []) {
-    if (!lastLoginByProfile.has(s.profile_id)) lastLoginByProfile.set(s.profile_id, s.login_at);
-  }
+  // Last sign-in comes from getLoginActivity (authoritative, per person) — NOT
+  // from the capped recent-sessions slice below, which only holds the newest 200
+  // sessions fleet-wide and would report most people as "never signed in".
+  const lastLoginByProfile = new Map<string, string | null>(login.rows.map((r) => [r.id, r.lastSignInAt]));
 
   const people: AttendancePerson[] = (profiles ?? []).map((p) => {
     const mark = markByProfile.get(p.id);

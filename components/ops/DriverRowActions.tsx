@@ -128,7 +128,7 @@ export function DriverRowActions(props: DriverRowActionsProps) {
       <RowMenu actions={actions} busy={isPending} ariaLabel={`Actions for ${driverName}`} />
 
       <EditDrawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit driver" subtitle={driverName}>
-        <DriverForm driver={driver} subsidiaries={props.subsidiaries} />
+        <DriverForm driver={driver} subsidiaries={props.subsidiaries} onSaved={() => setDrawer(null)} />
       </EditDrawer>
 
       <EditDrawer

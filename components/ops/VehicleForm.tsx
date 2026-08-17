@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,8 @@ interface SubsidiaryOption {
 interface VehicleFormProps {
   vehicle?: VehicleRow;
   subsidiaries: SubsidiaryOption[];
+  /** Called after a successful save — lets a containing drawer close itself. */
+  onSaved?: () => void;
 }
 
 const CLASSES = [
@@ -43,7 +46,8 @@ const STATUSES = [
   ["decommissioned", "Decommissioned"],
 ] as const;
 
-export function VehicleForm({ vehicle, subsidiaries }: VehicleFormProps) {
+export function VehicleForm({ vehicle, subsidiaries, onSaved }: VehicleFormProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const isEdit = !!vehicle;
 
@@ -51,9 +55,21 @@ export function VehicleForm({ vehicle, subsidiaries }: VehicleFormProps) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
-      const action = isEdit ? updateVehicle : createVehicle;
-      const result = await action(fd);
-      if (result && "error" in result) toast.error(result.error);
+      try {
+        const action = isEdit ? updateVehicle : createVehicle;
+        const result = await action(fd);
+        if (result && "error" in result) {
+          toast.error(result.error);
+        } else {
+          // Previously a successful save gave NO feedback and left a containing
+          // drawer open, so it looked like nothing happened.
+          toast.success("Vehicle saved");
+          router.refresh();
+          onSaved?.();
+        }
+      } catch (err) {
+        if (err instanceof Error && !err.message.includes("NEXT_REDIRECT")) toast.error(err.message);
+      }
     });
   }
 
@@ -197,12 +213,22 @@ export function VehicleForm({ vehicle, subsidiaries }: VehicleFormProps) {
               defaultValue={vehicle?.status ?? "available"}
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-ring"
             >
+              {/* 'on_trip' is set by the trip lifecycle, never chosen by hand —
+                  but it MUST appear while the vehicle is out, otherwise the
+                  select falls back to the first option and saving the form
+                  silently frees a vehicle that is still on the road. */}
+              {vehicle?.status === "on_trip" && <option value="on_trip">On trip (set by the trip)</option>}
               {STATUSES.map(([val, label]) => (
                 <option key={val} value={val}>
                   {label}
                 </option>
               ))}
             </select>
+            {vehicle?.status === "on_trip" && (
+              <p className="text-[11px] text-amber-600">
+                This vehicle is out on a trip — leave the status alone unless you know the trip has finished.
+              </p>
+            )}
           </div>
         </div>
       </fieldset>

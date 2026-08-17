@@ -38,9 +38,11 @@ export function TripRowActions(props: TripRowActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [endOdo, setEndOdo] = useState(props.startOdometer != null ? String(props.startOdometer) : "");
-  const [fuelL, setFuelL] = useState("");
-  const [fuelA, setFuelA] = useState("");
-  const [loads, setLoads] = useState("");
+  // Pre-fill from what the trip already has — submitting always writes these
+  // three fields, so blank inputs would wipe fuel/load figures already recorded.
+  const [fuelL, setFuelL] = useState(props.fuelLitres != null ? String(props.fuelLitres) : "");
+  const [fuelA, setFuelA] = useState(props.fuelAmount != null ? String(props.fuelAmount) : "");
+  const [loads, setLoads] = useState(props.loadCount != null ? String(props.loadCount) : "");
   const [reason, setReason] = useState("");
 
   function run(fn: () => Promise<unknown>, okMsg: string) {
@@ -85,7 +87,10 @@ export function TripRowActions(props: TripRowActionsProps) {
   }
 
   const live = status === "in_progress" || status === "paused";
-  const open = live || status === "suspended" || status === "ended" || status === "planned";
+  // Cancellable states only. 'ended' is excluded: the DB state machine allows
+  // ended → completed ONLY, so offering Cancel there would just raise a raw
+  // check_violation.
+  const cancellable = live || status === "suspended" || status === "planned";
   const ic = "h-4 w-4";
 
   const actions: RowAction[] = [
@@ -114,7 +119,7 @@ export function TripRowActions(props: TripRowActionsProps) {
   if (status === "completed" && isManager) {
     actions.push({ key: "recon", label: "Re-run reconciliation", icon: <RefreshCw className={ic} />, separatorBefore: true, onSelect: () => run(() => reconcileTrip(tripId), "Reconciliation re-run") });
   }
-  if (open) {
+  if (cancellable) {
     // Cancel is the destructive action for a trip. A hard delete is deliberately
     // not offered: it would cascade away GPS pings, inspections, reconciliation
     // and alert history, and invoiced trips are blocked by the database anyway.

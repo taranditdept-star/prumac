@@ -79,7 +79,9 @@ export default async function DriversPage({
       profiles!inner(full_name, phone, avatar_url, subsidiary_id, access_status),
       vehicle_assignments(id, vehicle_id, ended_at, vehicles(plate_number, plate_country, make, model))
     `)
-    .eq("is_active", true)
+    // Suspended/deactivated drivers are INCLUDED (they carry a badge and sort
+    // last). Filtering them out made them vanish the moment you suspended one,
+    // so "Reactivate" could never be reached from this screen.
     .order("created_at", { ascending: false })
     .returns<DriverWithJoins[]>();
 
@@ -122,7 +124,12 @@ export default async function DriversPage({
   for (const d of list) {
     d.vehicle_assignments = (d.vehicle_assignments ?? []).filter((a) => a.ended_at === null && a.vehicles);
   }
+  const isBlocked = (d: DriverWithJoins) => !d.is_active || d.profiles?.access_status !== "active";
   const sorted = [...list].sort((a, b) => {
+    // Suspended / deactivated drivers sort last, then by licence urgency.
+    const blockedA = isBlocked(a) ? 1 : 0;
+    const blockedB = isBlocked(b) ? 1 : 0;
+    if (blockedA !== blockedB) return blockedA - blockedB;
     const order = { expired: 0, critical: 1, warning: 2, ok: 3 } as const;
     const rankA = a.licence_expires_at ? order[getExpiryUrgency(a.licence_expires_at)] : 3;
     const rankB = b.licence_expires_at ? order[getExpiryUrgency(b.licence_expires_at)] : 3;
@@ -138,8 +145,10 @@ export default async function DriversPage({
       )
     : sorted;
 
+  const activeList = list.filter((d) => !isBlocked(d));
   const stats = {
-    total: list.length,
+    total: activeList.length,
+    blocked: list.length - activeList.length,
     assigned: list.filter((d) => d.vehicle_assignments?.some((a) => a.vehicles)).length,
     expiredLicence: list.filter(
       (d) => d.licence_expires_at && getExpiryUrgency(d.licence_expires_at) === "expired",
@@ -159,6 +168,7 @@ export default async function DriversPage({
           <h1 className="text-2xl lg:text-3xl font-bold text-ink-900 tracking-tight">Drivers</h1>
           <p className="text-sm text-ink-500 mt-1">
             {stats.total} active drivers across the fleet
+            {stats.blocked > 0 && <span className="text-ink-400"> · {stats.blocked} suspended or deactivated</span>}
           </p>
         </div>
         <Link
@@ -248,7 +258,20 @@ export default async function DriversPage({
                 />
                 <div className="absolute right-3 top-3 z-20">
                   <DriverRowActions
-                    driver={d}
+                    // DriverForm reads `profile` (singular); the Supabase embed
+                    // is `profiles`. Without this mapping the required Full-name
+                    // box renders empty and a retyped name would overwrite the
+                    // canonical one everywhere.
+                    driver={{
+                      ...d,
+                      profile: d.profiles
+                        ? {
+                            full_name: d.profiles.full_name,
+                            phone: d.profiles.phone,
+                            subsidiary_id: d.profiles.subsidiary_id,
+                          }
+                        : undefined,
+                    }}
                     driverName={name}
                     profileId={d.profile_id}
                     accessStatus={d.profiles?.access_status ?? "active"}

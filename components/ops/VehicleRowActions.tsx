@@ -129,7 +129,7 @@ export function VehicleRowActions({ vehicle, subsidiaries, isAdmin }: VehicleRow
         title="Edit vehicle"
         subtitle={`${vehicle.make} ${vehicle.model} · ${plate}`}
       >
-        <VehicleForm vehicle={vehicle} subsidiaries={subsidiaries} />
+        <VehicleForm vehicle={vehicle} subsidiaries={subsidiaries} onSaved={() => setDrawer(null)} />
       </EditDrawer>
 
       <EditDrawer open={drawer === "decommission"} onClose={() => setDrawer(null)} title="Decommission vehicle" subtitle={plate} widthClass="w-full max-w-lg">

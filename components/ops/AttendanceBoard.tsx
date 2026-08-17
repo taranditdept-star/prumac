@@ -38,6 +38,10 @@ function roleLabel(role: AppRole): string {
 function initial(name: string): string {
   return (name.trim()[0] ?? "?").toUpperCase();
 }
+/** Marks added on someone's behalf carry this note (see actions/attendance-admin.ts). */
+function byManager(p: AttendancePerson): boolean {
+  return p.note === "Marked by a manager";
+}
 
 export function AttendanceBoard({
   people,
@@ -50,11 +54,13 @@ export function AttendanceBoard({
   isToday: boolean;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  // A SET (not one slot) so two rows toggled at once don't clear each other's
+  // busy state and allow a duplicate submit.
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
   const inCount = people.filter((p) => p.markedAt).length;
   const outCount = people.length - inCount;
@@ -74,15 +80,27 @@ export function AttendanceBoard({
 
   function toggle(p: AttendancePerson) {
     const marking = !p.markedAt;
+    if (busyIds.has(p.id)) return;
     if (!marking && !confirm(`Clear ${p.name}'s check-in for this day?`)) return;
-    setPendingId(p.id);
+    setBusyIds((s) => new Set(s).add(p.id));
     startTransition(async () => {
-      const r = marking ? await markAttendanceFor(p.id, date) : await clearAttendanceFor(p.id, date);
-      setPendingId(null);
-      if ("error" in r) toast.error(r.error);
-      else {
-        toast.success(marking ? `${p.name} marked present` : `${p.name}'s check-in cleared`);
-        router.refresh();
+      try {
+        const r = marking ? await markAttendanceFor(p.id, date) : await clearAttendanceFor(p.id, date);
+        if ("error" in r) toast.error(r.error);
+        else {
+          toast.success(marking ? `${p.name} marked present` : `${p.name}'s check-in cleared`);
+          router.refresh();
+        }
+      } catch (e) {
+        // Without this the button would sit disabled on "…" forever after a
+        // network drop, with no indication anything went wrong.
+        toast.error(e instanceof Error ? e.message : "Couldn't save that — try again.");
+      } finally {
+        setBusyIds((s) => {
+          const n = new Set(s);
+          n.delete(p.id);
+          return n;
+        });
       }
     });
   }
@@ -136,7 +154,7 @@ export function AttendanceBoard({
           {shown.map((p) => {
             const isIn = !!p.markedAt;
             const open = expanded === p.id;
-            const busy = isPending && pendingId === p.id;
+            const busy = busyIds.has(p.id);
             return (
               <div key={p.id}>
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -161,9 +179,18 @@ export function AttendanceBoard({
                   </button>
 
                   {isIn ? (
-                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                      <Clock className="h-3 w-3" /> {fmtTime(p.markedAt!)}
-                    </span>
+                    // A manager-added mark records WHEN IT WAS ADDED, which isn't
+                    // the person's arrival time — so label it rather than passing
+                    // the click time off as a check-in time.
+                    byManager(p) ? (
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                        <Clock className="h-3 w-3" /> added by manager
+                      </span>
+                    ) : (
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                        <Clock className="h-3 w-3" /> {fmtTime(p.markedAt!)}
+                      </span>
+                    )
                   ) : (
                     <span className="shrink-0 rounded-lg bg-ink-100 px-2.5 py-1 text-[11px] font-semibold text-ink-500">Absent</span>
                   )}
@@ -189,7 +216,10 @@ export function AttendanceBoard({
                 {open && (
                   <div className="border-t border-ink-100 bg-ink-50/40 px-4 py-3">
                     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <Detail label="Checked in" value={p.markedAt ? fmtTime(p.markedAt) : "—"} />
+                      <Detail
+                        label={byManager(p) ? "Marked at" : "Checked in"}
+                        value={p.markedAt ? fmtTime(p.markedAt) : "—"}
+                      />
                       <Detail label="Last login" value={p.lastLoginAt ? fmtDateTime(p.lastLoginAt) : "never"} />
                       <Detail label="Last active" value={p.lastSeenAt ? fmtDateTime(p.lastSeenAt) : "—"} />
                       <Detail label="Note" value={p.note ?? "—"} />
