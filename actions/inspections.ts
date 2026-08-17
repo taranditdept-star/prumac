@@ -107,15 +107,31 @@ export async function submitStandaloneInspection(
   const inspectionId = data as string;
 
   // Free-text "something wrong that's not on the list" → an open "other" fault.
+  // Dedupe: if the same off-list problem is already open on this vehicle, don't
+  // create a duplicate. Because the duplicate is never inserted with THIS
+  // inspection_id, it also isn't re-announced — otherwise a persistent off-list
+  // issue re-typed each day would pile up faults and spam the team chat.
   const other = payload.other_problem?.trim();
   if (other) {
-    const { data: driver } = await supabase
-      .schema("app")
-      .from("drivers")
-      .select("id")
-      .eq("profile_id", (await requireAuth()).id)
-      .maybeSingle<{ id: string }>();
-    if (driver) {
+    const [{ data: driver }, { data: openOther }] = await Promise.all([
+      supabase
+        .schema("app")
+        .from("drivers")
+        .select("id")
+        .eq("profile_id", (await requireAuth()).id)
+        .maybeSingle<{ id: string }>(),
+      supabase
+        .schema("app")
+        .from("faults")
+        .select("description")
+        .eq("vehicle_id", payload.vehicle_id)
+        .is("checklist_item_id", null)
+        .in("status", ["reported", "acknowledged", "in_repair"])
+        .returns<{ description: string | null }[]>(),
+    ]);
+    const norm = (s: string) => s.trim().toLowerCase();
+    const already = (openOther ?? []).some((f) => f.description && norm(f.description) === norm(other));
+    if (driver && !already) {
       await supabase
         .schema("app")
         .from("faults")

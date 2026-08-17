@@ -364,12 +364,16 @@ export async function updateTrip(formData: FormData): Promise<ActionResult> {
   const { data: trip } = await supabase
     .schema("app")
     .from("trips")
-    .select("id, status, vehicle_id")
+    .select("id, status, vehicle_id, end_odometer_km")
     .eq("id", d.trip_id)
-    .single<{ id: string; status: string; vehicle_id: string }>();
+    .single<{ id: string; status: string; vehicle_id: string; end_odometer_km: number | null }>();
   if (!trip) return { error: "Trip not found" };
 
   const end = d.end_odometer_km ?? null;
+  // A finished trip must keep an end odometer — clearing it strands reconciliation.
+  if ((trip.status === "completed" || trip.status === "ended") && end == null) {
+    return { error: "A completed trip must keep its end odometer." };
+  }
   if (end != null) {
     if (end < d.start_odometer_km) return { error: "End odometer cannot be less than the start odometer." };
     if (end - d.start_odometer_km > 5000) {
@@ -397,17 +401,36 @@ export async function updateTrip(formData: FormData): Promise<ActionResult> {
 
   // A completed trip already advanced the vehicle odometer and ran
   // reconciliation against the old figures — re-do both so they stay correct.
-  if (trip.status === "completed") {
-    if (end != null) {
-      const { data: veh } = await supabase
-        .schema("app")
-        .from("vehicles")
-        .select("current_odometer_km")
-        .eq("id", trip.vehicle_id)
-        .single<{ current_odometer_km: number }>();
-      // Odometers only move forward — never lower the vehicle's reading.
-      if (veh && end > veh.current_odometer_km) {
+  if (trip.status === "completed" && end != null) {
+    const { data: veh } = await supabase
+      .schema("app")
+      .from("vehicles")
+      .select("current_odometer_km")
+      .eq("id", trip.vehicle_id)
+      .single<{ current_odometer_km: number }>();
+    if (veh) {
+      if (end > veh.current_odometer_km) {
+        // Upward correction — safe to bump the reading forward.
         await supabase.schema("app").from("vehicles").update({ current_odometer_km: end }).eq("id", trip.vehicle_id);
+      } else if (trip.end_odometer_km != null && trip.end_odometer_km === veh.current_odometer_km) {
+        // This trip is what set the vehicle's reading and we've corrected it
+        // downward — heal to the highest remaining completed-trip reading so the
+        // vehicle isn't left stuck at the now-corrected inflated value (which
+        // would trigger spurious "odometer rolled back" alerts on future trips).
+        const { data: maxRow } = await supabase
+          .schema("app")
+          .from("trips")
+          .select("end_odometer_km")
+          .eq("vehicle_id", trip.vehicle_id)
+          .eq("status", "completed")
+          .not("end_odometer_km", "is", null)
+          .order("end_odometer_km", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ end_odometer_km: number }>();
+        const healed = maxRow?.end_odometer_km ?? end;
+        if (healed < veh.current_odometer_km) {
+          await supabase.schema("app").from("vehicles").update({ current_odometer_km: healed }).eq("id", trip.vehicle_id);
+        }
       }
     }
     const { error: recErr } = await supabase.schema("app").rpc("fn_reconcile_trip", { p_trip_id: d.trip_id });
