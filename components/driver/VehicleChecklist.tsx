@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ChevronLeft, Check, AlertTriangle, ClipboardCheck, ChevronRight, ShieldAlert,
-  Droplet, Disc, Lightbulb, CircleDot, ShieldCheck, Car, Wrench, Gauge,
+  Droplet, Disc, Lightbulb, CircleDot, ShieldCheck, Car, Wrench, Gauge, History,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,16 +20,40 @@ interface ChecklistItem {
   requires_photo: boolean;
 }
 
+interface OpenIssue {
+  severity: string;
+  title: string;
+  description: string;
+  reported_at: string;
+}
+
 interface VehicleChecklistProps {
   vehicleId: string;
   templateId: string;
   templateName: string;
   items: ChecklistItem[];
   currentOdometer: number;
+  /** Faults already open on this vehicle, keyed by checklist_item_id. */
+  openIssues?: Record<string, OpenIssue>;
 }
 
 type Result = "pass" | "attention" | "fail";
 const REVIEW = -1;
+
+function severityToResult(severity: string): Result {
+  return severity === "critical" || severity === "high" ? "fail" : "attention";
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 60) return "earlier today";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
 
 // A rough icon per category so each card has a bit of visual context.
 function categoryIcon(category: string) {
@@ -50,6 +74,7 @@ export function VehicleChecklist({
   templateName,
   items,
   currentOdometer,
+  openIssues = {},
 }: VehicleChecklistProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -58,12 +83,18 @@ export function VehicleChecklist({
   const [index, setIndex] = useState(total ? 0 : REVIEW); // current item, or REVIEW
   const [flagging, setFlagging] = useState(false); // "Problem" tapped on the current card
   const [results, setResults] = useState<Record<string, Result>>(
-    () => Object.fromEntries(items.map((i) => [i.id, "pass" as Result])),
+    // A known-issue item starts at its fault severity (not "pass"), so leaving
+    // it untouched keeps the fault open rather than silently resolving it.
+    () => Object.fromEntries(items.map((i) => {
+      const issue = openIssues[i.id];
+      return [i.id, issue ? severityToResult(issue.severity) : ("pass" as Result)];
+    })),
   );
   const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [noteDraft, setNoteDraft] = useState("");
   const [odometer, setOdometer] = useState(String(currentOdometer));
   const [notes, setNotes] = useState("");
+  const [otherProblem, setOtherProblem] = useState("");
 
   const totals = useMemo(() => {
     const v = Object.values(results);
@@ -101,6 +132,14 @@ export function VehicleChecklist({
     goToReviewOrNext(i);
   }
 
+  // "Still broken" on a carried-forward issue — keep it open at its severity,
+  // preserving the original description as the note for context.
+  function answerStillBroken(item: ChecklistItem, i: number, issue: OpenIssue) {
+    setResults((p) => ({ ...p, [item.id]: severityToResult(issue.severity) }));
+    setItemNotes((n) => ({ ...n, [item.id]: n[item.id] ?? issue.description }));
+    goToReviewOrNext(i);
+  }
+
   function back(i: number) {
     if (flagging) {
       setFlagging(false);
@@ -127,6 +166,7 @@ export function VehicleChecklist({
         odometer_km: odo,
         notes: notes || undefined,
         items: payload,
+        other_problem: otherProblem.trim() || undefined,
       });
       if ("error" in result) {
         toast.error(result.error);
@@ -189,6 +229,20 @@ export function VehicleChecklist({
           />
         </div>
 
+        {/* Report a problem that isn't one of the checklist items */}
+        <div className="rounded-2xl border border-rose-200/70 bg-rose-50/40 p-4">
+          <Label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.1em] text-rose-600">
+            <Wrench className="h-3.5 w-3.5" /> Something wrong that&rsquo;s not on the list?
+          </Label>
+          <textarea
+            value={otherProblem}
+            onChange={(e) => setOtherProblem(e.target.value)}
+            rows={2}
+            placeholder="Describe any other problem — it becomes a fault the manager can act on"
+            className="mt-2 w-full resize-none rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+          />
+        </div>
+
         <button
           type="button"
           onClick={() => setIndex(total - 1)}
@@ -214,6 +268,7 @@ export function VehicleChecklist({
   const item = items[index];
   const Icon = categoryIcon(item.category);
   const answered = index; // items completed before this one
+  const issue = openIssues[item.id];
 
   return (
     <div className="space-y-4">
@@ -234,8 +289,8 @@ export function VehicleChecklist({
       </div>
 
       {/* Item card */}
-      <div className="rounded-3xl border border-ink-200/70 bg-white p-6 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-ink-100 text-ink-500">
+      <div className={`rounded-3xl border bg-white p-6 text-center ${issue ? "border-amber-300" : "border-ink-200/70"}`}>
+        <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ${issue ? "bg-amber-100 text-amber-600" : "bg-ink-100 text-ink-500"}`}>
           <Icon className="h-8 w-8" />
         </div>
         <h2 className="text-2xl font-bold leading-tight text-ink-900">{item.label}</h2>
@@ -246,7 +301,49 @@ export function VehicleChecklist({
         )}
       </div>
 
-      {!flagging ? (
+      {issue && !flagging ? (
+        // ── Carried-forward known issue: don't ask cold, ask if it's fixed ──
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <History className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-amber-800">Already reported {timeAgo(issue.reported_at)}</p>
+              {issue.description && (
+                <p className="mt-0.5 text-xs text-amber-700 break-words">&ldquo;{issue.description}&rdquo;</p>
+              )}
+            </div>
+          </div>
+          <p className="text-center text-sm font-bold text-ink-700">Is this fixed now?</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => answerOk(item, index)}
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-emerald-500 text-white transition-all hover:bg-emerald-600 active:scale-[0.98]"
+            >
+              <Check className="h-7 w-7" strokeWidth={2.5} />
+              <span className="text-base font-bold">Yes, fixed</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => answerStillBroken(item, index, issue)}
+              className="flex h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-rose-500 text-white transition-all hover:bg-rose-600 active:scale-[0.98]"
+            >
+              <AlertTriangle className="h-7 w-7" />
+              <span className="text-base font-bold">Still a problem</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setNoteDraft(itemNotes[item.id] ?? "");
+              setFlagging(true);
+            }}
+            className="w-full text-center text-xs font-semibold text-ink-400 hover:text-ink-700"
+          >
+            Add a note / change severity
+          </button>
+        </div>
+      ) : !flagging ? (
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"

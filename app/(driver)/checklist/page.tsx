@@ -17,6 +17,22 @@ interface ChecklistItem {
   requires_photo: boolean;
 }
 
+interface OpenIssue {
+  severity: string;
+  title: string;
+  description: string;
+  reported_at: string;
+}
+
+// fn_open_vehicle_faults isn't in the generated types — shape its rows here.
+interface OpenFaultRpcRow {
+  checklist_item_id: string | null;
+  severity: string;
+  title: string;
+  description: string | null;
+  reported_at: string;
+}
+
 interface AssignedVehicle {
   id: string;
   plate_number: string;
@@ -141,7 +157,7 @@ export default async function DriverChecklistPage({
     );
   }
 
-  const [{ data: template }, { data: items }] = await Promise.all([
+  const [{ data: template }, { data: items }, { data: openFaults }] = await Promise.all([
     supabase
       .schema("app")
       .from("inspection_templates")
@@ -155,7 +171,22 @@ export default async function DriverChecklistPage({
       .eq("template_id", templateId)
       .order("sort_order")
       .returns<ChecklistItem[]>(),
+    // Faults still open on this vehicle → the checklist pre-flags them as
+    // "known issue — fixed now?" instead of asking cold again.
+    supabase.schema("app").rpc("fn_open_vehicle_faults", { p_vehicle_id: selected.id }),
   ]);
+
+  const openIssues: Record<string, OpenIssue> = {};
+  for (const f of (openFaults as OpenFaultRpcRow[] | null) ?? []) {
+    if (f.checklist_item_id) {
+      openIssues[f.checklist_item_id] = {
+        severity: f.severity,
+        title: f.title,
+        description: f.description ?? "",
+        reported_at: f.reported_at,
+      };
+    }
+  }
 
   return (
     <div className="p-4 pt-6 space-y-5">
@@ -191,6 +222,7 @@ export default async function DriverChecklistPage({
         templateName={template?.name ?? "Checklist"}
         items={items ?? []}
         currentOdometer={selected.current_odometer_km}
+        openIssues={openIssues}
       />
     </div>
   );

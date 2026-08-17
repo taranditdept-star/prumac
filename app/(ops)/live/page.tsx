@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   Truck,
   Users,
@@ -10,6 +11,9 @@ import {
   Sparkles,
   Gauge,
   ShieldCheck,
+  Wrench,
+  ClipboardList,
+  CarFront,
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -40,6 +44,31 @@ interface TripActivityRow {
   start_odometer_km: number | null;
   end_odometer_km: number | null;
 }
+
+interface OpenFaultRow {
+  id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  category: string;
+  reported_at: string;
+  source: string;
+  vehicles: { plate_number: string; plate_country: string } | null;
+}
+
+function faultAgo(iso: string): string {
+  const hrs = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
+  if (hrs < 1) return "just now";
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
+
+const SEVERITY_STYLES: Record<string, string> = {
+  critical: "bg-rose-100 text-rose-700",
+  high: "bg-rose-50 text-rose-600",
+  medium: "bg-amber-50 text-amber-700",
+  low: "bg-ink-100 text-ink-600",
+};
 
 /** Monday 00:00 (server-local) of the week containing `d`, matching Postgres date_trunc('week'). */
 function startOfWeek(d: Date): Date {
@@ -81,6 +110,7 @@ export default async function LiveOpsPage() {
 
   const activityCutoff = new Date(startOfWeek(new Date()));
   activityCutoff.setDate(activityCutoff.getDate() - (ACTIVITY_WEEKS - 1) * 7);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   const [
     { data: vehicles },
@@ -88,6 +118,9 @@ export default async function LiveOpsPage() {
     { data: subsidiaries },
     { data: drivers },
     { data: activityRows },
+    { data: openFaults, count: openFaultsCount },
+    { count: openAccidentsCount },
+    { count: failedChecksCount },
   ] = await Promise.all([
     supabase.schema("app").from("vehicles").select("*").returns<VehicleRow[]>(),
     supabase
@@ -105,6 +138,29 @@ export default async function LiveOpsPage() {
       .gte("started_at", activityCutoff.toISOString())
       .not("status", "in", "(planned,cancelled)")
       .returns<TripActivityRow[]>(),
+    // Reported issues surfacing — open faults (with a preview list), open
+    // accidents, and failed/attention checks in the last 7 days.
+    supabase
+      .schema("app")
+      .from("faults")
+      .select("id, severity, title, category, reported_at, source, vehicles(plate_number, plate_country)", {
+        count: "exact",
+      })
+      .in("status", ["reported", "acknowledged", "in_repair"])
+      .order("reported_at", { ascending: false })
+      .limit(6)
+      .returns<OpenFaultRow[]>(),
+    supabase
+      .schema("app")
+      .from("accidents")
+      .select("id", { count: "exact", head: true })
+      .neq("status", "closed"),
+    supabase
+      .schema("app")
+      .from("inspections")
+      .select("id", { count: "exact", head: true })
+      .in("overall_result", ["fail", "attention"])
+      .gte("completed_at", sevenDaysAgo),
   ]);
 
   const activityData = weeklyActivity(activityRows ?? []);
@@ -272,6 +328,77 @@ export default async function LiveOpsPage() {
           tone={expiredDocs > 0 ? "rose" : "emerald"}
           hint={`${expiringSoonDocs} expiring soon`}
         />
+      </section>
+
+      {/* Reported issues — faults, accidents, failed checks */}
+      <section className="rounded-2xl bg-white border border-ink-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+        <div className="flex items-start justify-between p-6 pb-3">
+          <div>
+            <div className="inline-flex items-center gap-2 mb-1">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  (openFaultsCount ?? 0) + (openAccidentsCount ?? 0) > 0 ? "bg-rose-500 animate-pulse" : "bg-emerald-500"
+                }`}
+              />
+              <h2 className="text-base font-semibold text-ink-900">Reported Issues</h2>
+            </div>
+            <p className="text-xs text-ink-500">Faults, accidents and failed checks that need action</p>
+          </div>
+          <Link
+            href="/faults"
+            className="text-xs font-semibold text-orange-600 hover:text-orange-700 inline-flex items-center gap-1"
+          >
+            All faults
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Issue KPI tiles */}
+        <div className="grid grid-cols-3 gap-3 px-6 pb-4">
+          <IssueTile href="/faults" icon={<Wrench className="h-4 w-4" />} label="Open faults" value={openFaultsCount ?? 0} />
+          <IssueTile href="/accidents" icon={<CarFront className="h-4 w-4" />} label="Open accidents" value={openAccidentsCount ?? 0} />
+          <IssueTile href="/inspections" icon={<ClipboardList className="h-4 w-4" />} label="Failed checks · 7d" value={failedChecksCount ?? 0} tone="amber" />
+        </div>
+
+        {/* Recent open faults */}
+        {(openFaults ?? []).length === 0 ? (
+          <div className="py-8 text-center px-6 border-t border-ink-100">
+            <div className="inline-flex h-12 w-12 rounded-2xl bg-emerald-50 ring-4 ring-emerald-50/50 items-center justify-center mb-2">
+              <ShieldCheck className="h-6 w-6 text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-ink-900">No open faults</p>
+            <p className="text-xs text-ink-500 mt-1">Every reported fault has been resolved.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-100 border-t border-ink-100">
+            {(openFaults ?? []).map((f) => (
+              <Link
+                key={f.id}
+                href={`/faults/${f.id}`}
+                className="flex items-center gap-3 px-6 py-3 hover:bg-ink-50/50 transition-colors group"
+              >
+                {f.vehicles ? (
+                  <PlateBadge plate={f.vehicles.plate_number} country={f.vehicles.plate_country as VehicleRow["plate_country"]} size="sm" />
+                ) : (
+                  <span className="text-xs text-ink-400">—</span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink-900 truncate">{f.title}</p>
+                  <p className="text-xs text-ink-500 mt-0.5 capitalize">
+                    {f.category}
+                    {f.source === "checklist" && <span className="ml-1.5 text-amber-600">· from checklist</span>}
+                    {" · "}
+                    {faultAgo(f.reported_at)}
+                  </p>
+                </div>
+                <span className={`rounded-lg px-2 py-0.5 text-[11px] font-bold capitalize ${SEVERITY_STYLES[f.severity] ?? SEVERITY_STYLES.low}`}>
+                  {f.severity}
+                </span>
+                <ArrowUpRight className="h-4 w-4 text-ink-300 group-hover:text-orange-500 transition-all" />
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Activity chart + Status donut */}
@@ -451,5 +578,39 @@ export default async function LiveOpsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function IssueTile({
+  href,
+  icon,
+  label,
+  value,
+  tone = "rose",
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  value: number;
+  tone?: "rose" | "amber";
+}) {
+  const active = value > 0;
+  const activeCls = tone === "amber" ? "border-amber-200 bg-amber-50" : "border-rose-200 bg-rose-50";
+  const iconCls = tone === "amber" ? "text-amber-600" : "text-rose-600";
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+        active ? activeCls : "border-ink-200/70 bg-white hover:bg-ink-50/50"
+      }`}
+    >
+      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${active ? "bg-white" : "bg-ink-100"} ${active ? iconCls : "text-ink-400"}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-xl font-bold text-ink-900 tabular leading-none">{value}</p>
+        <p className="text-[11px] text-ink-500 mt-1 truncate">{label}</p>
+      </div>
+    </Link>
   );
 }
