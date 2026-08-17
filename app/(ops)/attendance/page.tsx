@@ -37,6 +37,27 @@ interface ProfileRow {
   role: AppRole;
 }
 
+interface SessionRow {
+  id: string;
+  login_at: string;
+  last_seen_at: string;
+  logout_at: string | null;
+  profiles: { full_name: string | null; role: AppRole } | null;
+}
+
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Harare",
+  });
+}
+
+function fmtDuration(startIso: string, endIso: string): string {
+  const mins = Math.max(Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000), 0);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  return `${h}h ${mins % 60}m`;
+}
+
 export default async function AttendancePage({
   searchParams,
 }: {
@@ -48,7 +69,7 @@ export default async function AttendancePage({
   const date = sp.date && isDate(sp.date) ? sp.date : today;
   const supabase = await createClient();
 
-  const [{ data: profiles }, { data: marks }] = await Promise.all([
+  const [{ data: profiles }, { data: marks }, { data: sessions }] = await Promise.all([
     supabase
       .schema("app")
       .from("profiles")
@@ -63,6 +84,13 @@ export default async function AttendancePage({
       .select("profile_id, marked_at")
       .eq("attendance_date", date)
       .returns<{ profile_id: string; marked_at: string }[]>(),
+    supabase
+      .schema("app")
+      .from("login_sessions")
+      .select("id, login_at, last_seen_at, logout_at, profiles(full_name, role)")
+      .order("login_at", { ascending: false })
+      .limit(60)
+      .returns<SessionRow[]>(),
   ]);
 
   const login = await getLoginActivity();
@@ -172,6 +200,67 @@ export default async function AttendancePage({
             ))}
           </div>
         )}
+      </section>
+
+      {/* Recent login sessions — time in / time out / duration */}
+      <section>
+        <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-400">
+          Recent login sessions
+        </p>
+        {(sessions ?? []).length === 0 ? (
+          <div className="rounded-2xl border border-ink-200/70 bg-white py-10 text-center text-sm text-ink-500">
+            No login sessions recorded yet.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-ink-200/70 bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-ink-100 bg-ink-50/50 text-left text-[11px] uppercase tracking-wider text-ink-400">
+                    <th className="px-4 py-2.5 font-bold">Person</th>
+                    <th className="px-4 py-2.5 font-bold">Logged in</th>
+                    <th className="px-4 py-2.5 font-bold">Logged out / last active</th>
+                    <th className="px-4 py-2.5 font-bold">Duration</th>
+                    <th className="px-4 py-2.5 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {(sessions ?? []).map((s) => {
+                    const end = s.logout_at ?? s.last_seen_at;
+                    const stillOn = !s.logout_at && Date.now() - new Date(s.last_seen_at).getTime() < 180_000;
+                    return (
+                      <tr key={s.id}>
+                        <td className="px-4 py-3 font-semibold text-ink-900">
+                          {s.profiles?.full_name ?? "Unknown"}
+                          <span className="ml-1.5 text-[11px] font-normal text-ink-400">{s.profiles ? roleLabel(s.profiles.role) : ""}</span>
+                        </td>
+                        <td className="px-4 py-3 text-ink-600">{fmtDateTime(s.login_at)}</td>
+                        <td className="px-4 py-3 text-ink-600">
+                          {s.logout_at ? fmtDateTime(s.logout_at) : `${fmtDateTime(s.last_seen_at)} (approx)`}
+                        </td>
+                        <td className="px-4 py-3 font-plate text-ink-700">{fmtDuration(s.login_at, end)}</td>
+                        <td className="px-4 py-3">
+                          {stillOn ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Online
+                            </span>
+                          ) : s.logout_at ? (
+                            <span className="text-xs font-semibold text-ink-400">Signed out</span>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-600">Left (tab closed)</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <p className="mt-2 px-1 text-[11px] text-ink-400">
+          Most drivers close the app instead of signing out, so &ldquo;last active&rdquo; is the approximate log-out time.
+        </p>
       </section>
 
       {/* App login activity — interactive, drill into each person */}

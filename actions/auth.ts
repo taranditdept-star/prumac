@@ -47,6 +47,9 @@ export async function signInWithEmail(formData: FormData): Promise<ActionResult>
 
   const target = roleDefaultPath(profile?.role ?? "driver");
 
+  // Open a login-session row (time logged in) — best effort.
+  await supabase.schema("app").rpc("fn_start_session");
+
   // Invalidate Next.js layout cache so the new auth state is read on next render.
   revalidatePath("/", "layout");
 
@@ -95,6 +98,9 @@ export async function verifyPhoneOtp(formData: FormData): Promise<ActionResult> 
     .eq("id", data.user.id)
     .single<{ role: AppRole }>();
 
+  // Open a login-session row (time logged in) — best effort.
+  await supabase.schema("app").rpc("fn_start_session");
+
   revalidatePath("/", "layout");
   redirect(roleDefaultPath(profile?.role ?? "driver"));
 }
@@ -135,6 +141,8 @@ export async function updatePassword(formData: FormData): Promise<ActionResult> 
 /** Sign out. */
 export async function signOut(): Promise<ActionResult> {
   const supabase = await createClient();
+  // Close the open login-session (time logged out) while still authenticated.
+  await supabase.schema("app").rpc("fn_end_session");
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");

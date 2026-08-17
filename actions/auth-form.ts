@@ -47,6 +47,9 @@ export async function signInWithEmailForm(formData: FormData): Promise<void> {
     .eq("id", user.id)
     .single<{ role: AppRole }>();
 
+  // Open a login-session row (time logged in) — best effort.
+  await supabase.schema("app").rpc("fn_start_session");
+
   // Crucial: revalidate the layout so the new session is read on the next render
   revalidatePath("/", "layout");
   redirect(roleDefaultPath(profile?.role ?? "driver"));
