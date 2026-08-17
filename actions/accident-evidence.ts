@@ -16,7 +16,14 @@ interface AttachInput {
   size_bytes: number;
   caption?: string;
   duration_seconds?: number | null;
+  /** Who the evidence came FROM (not who clicked upload). */
+  source?: string;
+  source_detail?: string;
 }
+
+export const EVIDENCE_SOURCES = [
+  "committee", "driver", "police", "insurer", "workshop", "witness", "other",
+] as const;
 
 /**
  * Register a file the BROWSER has already uploaded to the evidence bucket.
@@ -59,6 +66,12 @@ export async function attachAccidentMedia(input: AttachInput): Promise<EvidenceR
       size_bytes: input.size_bytes,
       duration_seconds: input.duration_seconds ?? null,
       caption: input.caption?.trim() ? input.caption.trim().slice(0, 500) : null,
+      // `source` is who the evidence is FROM; uploaded_by is the account that
+      // attached it. Both are shown, because they're often different people.
+      source: (EVIDENCE_SOURCES as readonly string[]).includes(input.source ?? "")
+        ? input.source
+        : "committee",
+      source_detail: input.source_detail?.trim() ? input.source_detail.trim().slice(0, 200) : null,
       uploaded_by: profile.id,
     })
     .select("id")
@@ -88,6 +101,40 @@ export async function deleteAccidentMedia(mediaId: string): Promise<EvidenceResu
 
   // Best effort — a stray object is harmless, a missing row is not.
   await service.storage.from(row.bucket || EVIDENCE_BUCKET).remove([row.file_path]);
+
+  revalidatePath(`/accidents/${row.accident_id}`);
+  return { success: true };
+}
+
+/** Re-attribute an attachment (source + who it came from + a caption). */
+export async function setAccidentMediaAttribution(
+  mediaId: string,
+  input: { source: string; source_detail?: string; caption?: string },
+): Promise<EvidenceResult> {
+  await requireRole("fleet_manager", "admin");
+  if (!(EVIDENCE_SOURCES as readonly string[]).includes(input.source)) {
+    return { error: "Pick who the evidence came from." };
+  }
+
+  const service = createServiceClient();
+  const { data: row } = await service
+    .schema("app")
+    .from("accident_media")
+    .select("accident_id")
+    .eq("id", mediaId)
+    .maybeSingle<{ accident_id: string }>();
+  if (!row) return { error: "That attachment no longer exists." };
+
+  const { error } = await service
+    .schema("app")
+    .from("accident_media")
+    .update({
+      source: input.source,
+      source_detail: input.source_detail?.trim() ? input.source_detail.trim().slice(0, 200) : null,
+      caption: input.caption?.trim() ? input.caption.trim().slice(0, 500) : null,
+    })
+    .eq("id", mediaId);
+  if (error) return { error: error.message };
 
   revalidatePath(`/accidents/${row.accident_id}`);
   return { success: true };

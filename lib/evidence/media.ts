@@ -12,8 +12,18 @@ export interface EvidenceItem {
   size_bytes: number | null;
   caption: string | null;
   created_at: string;
+  /** Where the item came from: committee / driver / police / … */
+  source: string;
+  /** Free text, e.g. "Mr Vuranda — committee interview". */
+  source_detail: string | null;
+  /** Display name of the account that uploaded it. */
+  uploaded_by_name: string | null;
   /** Short-lived signed URL, minted server-side. */
   url: string | null;
+}
+
+interface MediaRow extends Omit<EvidenceItem, "url" | "uploaded_by_name"> {
+  profiles: { full_name: string | null } | null;
 }
 
 /** How long a media URL stays valid. Long enough to watch a clip, short enough to matter. */
@@ -32,12 +42,19 @@ export async function getAccidentEvidence(accidentId: string): Promise<EvidenceI
   const { data: rows } = await service
     .schema("app")
     .from("accident_media")
-    .select("id, kind, bucket, file_path, original_filename, mime_type, size_bytes, caption, created_at")
+    .select(`
+      id, kind, bucket, file_path, original_filename, mime_type, size_bytes, caption, created_at,
+      source, source_detail,
+      profiles:uploaded_by(full_name)
+    `)
     .eq("accident_id", accidentId)
     .order("created_at", { ascending: true })
-    .returns<Omit<EvidenceItem, "url">[]>();
+    .returns<MediaRow[]>();
 
-  const items = rows ?? [];
+  const items = (rows ?? []).map((r) => {
+    const { profiles, ...rest } = r;
+    return { ...rest, uploaded_by_name: profiles?.full_name ?? null };
+  });
   if (items.length === 0) return [];
 
   // Sign per bucket (media lives in 'evidence'; legacy rows could differ).

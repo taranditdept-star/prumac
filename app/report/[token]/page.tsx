@@ -162,11 +162,15 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
       id: `scene-${i}`,
       kind: "photo" as const,
       url: p.url,
-      original_filename: "Scene photo (driver)",
+      original_filename: "Scene photo",
       mime_type: "image/jpeg",
       size_bytes: null,
       caption: null,
       created_at: accident.reported_at,
+      // These came from the driver's own report, not the committee.
+      source: "driver",
+      source_detail: accident.drivers?.profiles?.full_name ?? null,
+      uploaded_by_name: null,
     })),
     ...evidence.map((e) => ({ ...e, url: `/report/${token}/media/${e.id}` })),
   ];

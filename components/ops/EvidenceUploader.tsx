@@ -35,11 +35,26 @@ const ICON: Record<MediaKind, typeof ImageIcon> = {
  * one), then a small action records the metadata row. Rejections are surfaced
  * verbatim — the older photo uploader swallowed 413/415 into a bare "Retry".
  */
+const SOURCES: [string, string][] = [
+  ["committee", "PRUMAC Committee"],
+  ["driver", "Driver"],
+  ["police", "Police"],
+  ["insurer", "Insurer"],
+  ["workshop", "Workshop"],
+  ["witness", "Witness"],
+  ["other", "Other"],
+];
+
 export function EvidenceUploader({ accidentId }: { accidentId: string }) {
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [source, setSource] = useState("committee");
+  const [sourceDetail, setSourceDetail] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const sb = useRef(createClient());
+  // Read inside the upload callback so a mid-batch change doesn't retro-tag.
+  const attribution = useRef({ source, sourceDetail });
+  attribution.current = { source, sourceDetail };
 
   const patch = (id: string, next: Partial<Job>) =>
     setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...next } : j)));
@@ -67,6 +82,8 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
           original_filename: file.name,
           mime_type: file.type || "application/octet-stream",
           size_bytes: file.size,
+          source: attribution.current.source,
+          source_detail: attribution.current.sourceDetail,
         });
         if ("error" in res) {
           patch(id, { status: "error", message: res.error, file });
@@ -102,6 +119,34 @@ export function EvidenceUploader({ accidentId }: { accidentId: string }) {
 
   return (
     <div className="space-y-3">
+      {/* Attribution applies to the files added next — set it before choosing. */}
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-ink-200/70 bg-white p-3">
+        <label className="min-w-[180px]">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Evidence is from</span>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="mt-1 h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+          >
+            {SOURCES.map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-[220px] flex-1">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Detail (optional)</span>
+          <input
+            value={sourceDetail}
+            onChange={(e) => setSourceDetail(e.target.value)}
+            placeholder="e.g. Mr Vuranda — committee interview"
+            className="mt-1 h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+          />
+        </label>
+        <p className="w-full text-[11px] text-ink-400">
+          Tagged on the files you add next. Your name is recorded automatically as the person who attached them.
+        </p>
+      </div>
+
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {

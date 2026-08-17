@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Film, Mic, ImageIcon, X, Trash2, ExternalLink } from "lucide-react";
+import { FileText, Film, Mic, ImageIcon, X, Trash2, ExternalLink, UserCircle2 } from "lucide-react";
 import { humanSize, type MediaKind } from "@/lib/evidence/limits";
 
 export interface GalleryItem {
@@ -13,10 +13,62 @@ export interface GalleryItem {
   size_bytes: number | null;
   caption: string | null;
   created_at: string;
+  /** committee / driver / police / insurer / workshop / witness / other */
+  source?: string;
+  source_detail?: string | null;
+  uploaded_by_name?: string | null;
 }
 
 const ICON: Record<MediaKind, typeof ImageIcon> = { photo: ImageIcon, video: Film, audio: Mic, document: FileText };
 const LABEL: Record<MediaKind, string> = { photo: "Photo", video: "Video", audio: "Audio", document: "Document" };
+
+export const SOURCE_LABELS: Record<string, string> = {
+  committee: "PRUMAC Committee",
+  driver: "Driver",
+  police: "Police",
+  insurer: "Insurer",
+  workshop: "Workshop",
+  witness: "Witness",
+  other: "Other",
+};
+
+const SOURCE_STYLE: Record<string, string> = {
+  committee: "bg-orange-50 text-orange-700 ring-orange-200",
+  driver: "bg-sky-50 text-sky-700 ring-sky-200",
+  police: "bg-violet-50 text-violet-700 ring-violet-200",
+  insurer: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  workshop: "bg-amber-50 text-amber-700 ring-amber-200",
+  witness: "bg-ink-100 text-ink-700 ring-ink-200",
+  other: "bg-ink-100 text-ink-600 ring-ink-200",
+};
+
+function fmtWhen(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Harare",
+  });
+}
+
+/** "PRUMAC Committee · Mr Vuranda interview · uploaded by Tendai · 17 Aug 2026, 17:10" */
+export function SourceTag({ it, dark = false }: { it: GalleryItem; dark?: boolean }) {
+  const src = it.source ?? "committee";
+  const label = SOURCE_LABELS[src] ?? src;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      <span
+        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ${
+          SOURCE_STYLE[src] ?? SOURCE_STYLE.other
+        }`}
+      >
+        <UserCircle2 className="h-3 w-3" /> {label}
+      </span>
+      <span className={`text-[10px] ${dark ? "text-white/50" : "text-ink-400"}`}>
+        {it.source_detail ? `${it.source_detail} · ` : ""}
+        {it.uploaded_by_name ? `added by ${it.uploaded_by_name} · ` : ""}
+        {fmtWhen(it.created_at)}
+      </span>
+    </div>
+  );
+}
 
 /**
  * Renders accident evidence: photos in a lightbox, video and audio with native
@@ -72,9 +124,10 @@ export function EvidenceGallery({
                   )}
                 </button>
                 {onDelete && <RemoveBtn onClick={() => onDelete(it.id)} />}
-                {it.caption && (
-                  <figcaption className="bg-white px-2 py-1.5 text-[11px] text-ink-600 line-clamp-2">{it.caption}</figcaption>
-                )}
+                <figcaption className="bg-white px-2 py-1.5">
+                  {it.caption && <span className="block text-[11px] text-ink-600 line-clamp-2">{it.caption}</span>}
+                  <SourceTag it={it} />
+                </figcaption>
               </figure>
             ))}
           </div>
@@ -117,6 +170,7 @@ export function EvidenceGallery({
                       {LABEL[it.kind]}
                       {it.size_bytes ? ` · ${humanSize(it.size_bytes)}` : ""}
                     </p>
+                    <SourceTag it={it} />
                   </div>
                   {onDelete && (
                     <button
@@ -155,6 +209,7 @@ export function EvidenceGallery({
                     {it.original_filename ?? "Document"}
                   </p>
                   {it.caption && <p className="truncate text-xs text-ink-500">{it.caption}</p>}
+                  <SourceTag it={it} />
                 </div>
                 {it.url && allowOpenInNewTab && (
                   <a
@@ -250,6 +305,7 @@ function Meta({
         <p className={`text-[11px] ${dark ? "text-white/50" : "text-ink-400"}`}>
           {it.size_bytes ? humanSize(it.size_bytes) : ""}
         </p>
+        <SourceTag it={it} dark={dark} />
       </div>
       {it.url && allowOpenInNewTab && (
         <a
