@@ -121,6 +121,7 @@ export default async function LiveOpsPage() {
     { data: openFaults, count: openFaultsCount },
     { count: openAccidentsCount },
     { count: failedChecksCount },
+    { data: locationOffDrivers },
   ] = await Promise.all([
     supabase.schema("app").from("vehicles").select("*").returns<VehicleRow[]>(),
     supabase
@@ -161,6 +162,14 @@ export default async function LiveOpsPage() {
       .select("id", { count: "exact", head: true })
       .in("overall_result", ["fail", "attention"])
       .gte("completed_at", sevenDaysAgo),
+    // Drivers who have location sharing turned OFF (refused permission).
+    supabase
+      .schema("app")
+      .from("profiles")
+      .select("full_name")
+      .eq("role", "driver")
+      .eq("location_status", "denied")
+      .returns<{ full_name: string | null }[]>(),
   ]);
 
   const activityData = weeklyActivity(activityRows ?? []);
@@ -352,6 +361,21 @@ export default async function LiveOpsPage() {
             <ArrowUpRight className="h-3 w-3" />
           </Link>
         </div>
+
+        {/* Location-off drivers — can't be tracked */}
+        {(locationOffDrivers ?? []).length > 0 && (
+          <div className="mx-6 mb-4 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-rose-800">
+                {(locationOffDrivers ?? []).length} driver{(locationOffDrivers ?? []).length !== 1 ? "s have" : " has"} location OFF — can&apos;t be tracked
+              </p>
+              <p className="mt-0.5 text-xs text-rose-700 break-words">
+                {(locationOffDrivers ?? []).map((d) => d.full_name ?? "Unknown").join(", ")}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Issue KPI tiles */}
         <div className="grid grid-cols-3 gap-3 px-6 pb-4">

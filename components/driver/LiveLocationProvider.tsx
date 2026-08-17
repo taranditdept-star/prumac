@@ -138,6 +138,21 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // Report the permission state to head office whenever it changes, so managers
+  // can see who is sharing location and who has it OFF. Best-effort; the initial
+  // "prompt" state is skipped (it isn't a decision yet).
+  const reportedRef = useRef<LocationPermission | null>(null);
+  useEffect(() => {
+    if (permission === "prompt") return;
+    if (reportedRef.current === permission) return;
+    reportedRef.current = permission;
+    const supabase = createClient();
+    supabase
+      .schema("app")
+      .rpc("fn_report_location_status", { p_status: permission })
+      .then(() => {}, () => {});
+  }, [permission]);
+
   // Best-effort battery level (Chrome/Android). Silent where unsupported.
   useEffect(() => {
     const nav = navigator as Navigator & {
