@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "test:unit": "vitest run tests/unit",
     "db:types": "supabase gen types typescript --local > types/database.ts",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "check:actions": "node scripts/check-server-actions.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireRole } from "@/lib/auth/session";
-import { EVIDENCE_BUCKET, MAX_UPLOAD_BYTES, kindForMime, type MediaKind } from "@/lib/evidence/limits";
+import {
+  EVIDENCE_BUCKET, EVIDENCE_SOURCES, MAX_UPLOAD_BYTES, kindForMime, type MediaKind,
+} from "@/lib/evidence/limits";
 
 export type EvidenceResult<T = void> = { error: string } | { success: true; data?: T };
 
@@ -21,10 +23,6 @@ interface AttachInput {
   source_detail?: string;
 }
 
-export const EVIDENCE_SOURCES = [
-  "committee", "driver", "police", "insurer", "workshop", "witness", "other",
-] as const;
-
 /**
  * Register a file the BROWSER has already uploaded to the evidence bucket.
  *
@@ -36,7 +34,7 @@ export async function attachAccidentMedia(input: AttachInput): Promise<EvidenceR
   const profile = await requireRole("fleet_manager", "admin");
 
   if (!input.accident_id || !input.file_path) return { error: "Missing file details." };
-  const kind: MediaKind | null = kindForMime(input.mime_type);
+  const kind: MediaKind | null = kindForMime(input.mime_type, input.original_filename);
   if (!kind) return { error: "That file type isn't supported." };
   if (input.size_bytes > MAX_UPLOAD_BYTES) return { error: "That file is over the size limit." };
   // Guard against a client posting a path outside this accident's folder.

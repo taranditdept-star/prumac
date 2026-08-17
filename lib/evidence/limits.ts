@@ -12,6 +12,16 @@ export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export type MediaKind = "photo" | "video" | "audio" | "document";
 
+/**
+ * Where a piece of evidence came from. Lives HERE, not in actions/: a
+ * `"use server"` module may only export async functions, and exporting this array
+ * from one broke the whole action module at runtime (which took the accident page
+ * down with it).
+ */
+export const EVIDENCE_SOURCES = [
+  "committee", "driver", "police", "insurer", "workshop", "witness", "other",
+] as const;
+
 /** Exactly what the evidence bucket accepts (migration 0063). */
 const ALLOWED: Record<MediaKind, string[]> = {
   photo: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
@@ -91,19 +101,62 @@ export function kindForMime(mime: string, filename?: string): MediaKind | null {
   return EXT_KIND[ext] ?? null;
 }
 
-/** Best-guess content type for upload when the browser gives us nothing. */
+/** The content type we WANT stored for a given extension. */
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  // audio
+  opus: "audio/opus", oga: "audio/ogg", ogg: "audio/ogg", amr: "audio/amr",
+  m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac", flac: "audio/flac",
+  // video
+  mov: "video/quicktime", mkv: "video/x-matroska", "3gp": "video/3gpp",
+  mp4: "video/mp4", webm: "video/webm", mpeg: "video/mpeg", mpg: "video/mpeg",
+  // images
+  heic: "image/heic", heif: "image/heif", jpg: "image/jpeg", jpeg: "image/jpeg",
+  png: "image/png", webp: "image/webp",
+  // documents
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  pdf: "application/pdf", txt: "text/plain",
+};
+
+/**
+ * Decide the content type to upload with.
+ *
+ * The FILE EXTENSION wins over whatever the OS claims. Windows hands out
+ * registry-derived oddities — a .aac arrives as `audio/vnd.dlna.adts`, .wav can
+ * be `audio/vnd.wave`, .m4a can be `audio/x-m4a` — and passing those straight to
+ * Storage got the upload refused even though the file was perfectly valid. This
+ * kills that whole class of failure rather than chasing one type at a time.
+ */
 export function contentTypeFor(file: { name: string; type: string }): string {
-  if (file.type) return file.type;
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
-  const map: Record<string, string> = {
-    opus: "audio/opus", oga: "audio/ogg", ogg: "audio/ogg", amr: "audio/amr",
-    m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac", flac: "audio/flac",
-    mov: "video/quicktime", mkv: "video/x-matroska", "3gp": "video/3gpp", mp4: "video/mp4",
-    heic: "image/heic", heif: "image/heif", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    pdf: "application/pdf", txt: "text/plain",
+  const t = (file.type || "").toLowerCase();
+
+  // .webm / .mp4 / .3gp / .ogg hold EITHER audio or video. An in-app voice note
+  // is audio/webm — mapping it by extension alone would file a recording as a
+  // video, so when the browser names the family, that wins for these.
+  const AUDIO_ALT: Record<string, string> = {
+    webm: "audio/webm", mp4: "audio/mp4", "3gp": "audio/3gpp", ogg: "audio/ogg", mkv: "audio/webm",
   };
-  return map[ext] ?? "application/octet-stream";
+  if (t.startsWith("audio/") && AUDIO_ALT[ext]) return AUDIO_ALT[ext];
+
+  const byExt = EXT_CONTENT_TYPE[ext];
+  if (byExt) return byExt;
+
+  if (ALL_ALLOWED_MIME.includes(t)) return t;
+
+  // Recognisable family but an unknown subtype — keep the family so the file is
+  // still classified correctly, and let the bucket's octet-stream rule carry it.
+  if (t.startsWith("audio/")) return "audio/mpeg";
+  if (t.startsWith("video/")) return "video/mp4";
+  if (t.startsWith("image/")) return "image/jpeg";
+  return "application/octet-stream";
+}
+
+/** Webm needs care: the same extension is used for audio-only and video files. */
+export function isAudioOnlyWebm(file: { name: string; type: string }): boolean {
+  return file.name.toLowerCase().endsWith(".webm") && (file.type || "").startsWith("audio/");
 }
 
 export function humanSize(bytes: number): string {
