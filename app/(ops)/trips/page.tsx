@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
 import { TripsFilters } from "@/components/ops/TripsFilters";
+import { TripRowActions } from "@/components/ops/TripRowActions";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,15 @@ const LIST_LIMIT = 100;
 interface TripListRow {
   id: string;
   status: TripStatus;
+  purpose: string;
   route_description: string | null;
   origin_label: string | null;
   destination_label: string | null;
   start_odometer_km: number | null;
   end_odometer_km: number | null;
+  fuel_litres: number | null;
+  fuel_amount: number | null;
+  load_count: number | null;
   started_at: string | null;
   vehicles: { plate_number: string; plate_country: CountryCode; make: string; model: string } | null;
   drivers: { id: string; profiles: { full_name: string | null } | null } | null;
@@ -80,7 +85,8 @@ export default async function TripsPage({
 }: {
   searchParams: Promise<{ period?: string; vehicle?: string; status?: string; q?: string; from?: string; to?: string }>;
 }) {
-  await requireRole("fleet_manager", "admin");
+  const profile = await requireRole("fleet_manager", "admin");
+  const isManager = profile.role === "fleet_manager" || profile.role === "admin";
   const sp = await searchParams;
   const supabase = await createClient();
 
@@ -105,8 +111,8 @@ export default async function TripsPage({
   // COUNT on every load).
   let listQ = applyFilters(
     supabase.schema("app").from("trips").select(`
-      id, status, route_description, origin_label, destination_label,
-      start_odometer_km, end_odometer_km, started_at,
+      id, status, purpose, route_description, origin_label, destination_label,
+      start_odometer_km, end_odometer_km, fuel_litres, fuel_amount, load_count, started_at,
       vehicles(plate_number, plate_country, make, model),
       drivers(id, profiles(full_name)),
       subsidiaries(name)
@@ -276,13 +282,31 @@ export default async function TripsPage({
                       </span>
                     </td>
                     <td className="px-6 py-4"><span className="text-xs text-ink-500">{fmtStarted(t.started_at)}</span></td>
-                    <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/trips/${t.id}`}
-                        className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/trips/${t.id}`}
+                          aria-label="Open trip"
+                          className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
+                        >
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                        <TripRowActions
+                          tripId={t.id}
+                          status={t.status}
+                          isManager={isManager}
+                          label={t.vehicles?.plate_number ?? "trip"}
+                          purpose={t.purpose}
+                          routeDescription={t.route_description}
+                          originLabel={t.origin_label}
+                          destinationLabel={t.destination_label}
+                          startOdometer={t.start_odometer_km}
+                          endOdometer={t.end_odometer_km}
+                          fuelLitres={t.fuel_litres}
+                          fuelAmount={t.fuel_amount}
+                          loadCount={t.load_count}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );

@@ -28,12 +28,18 @@ interface TripEditFormProps {
   fuelLitres: number | null;
   fuelAmount: number | null;
   loadCount: number | null;
+  /** Render the fields directly (no "Edit trip details" trigger) — for use inside a drawer. */
+  embedded?: boolean;
+  /** Called when the embedded form closes or saves. */
+  onClose?: () => void;
 }
 
 export function TripEditForm(props: TripEditFormProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const embedded = !!props.embedded;
+  const close = () => (embedded ? props.onClose?.() : setOpen(false));
 
   const [purpose, setPurpose] = useState(props.purpose);
   const [route, setRoute] = useState(props.routeDescription ?? "");
@@ -67,13 +73,13 @@ export function TripEditForm(props: TripEditFormProps) {
         toast.error(res.error);
       } else {
         toast.success("Trip updated");
-        setOpen(false);
+        close();
         router.refresh();
       }
     });
   }
 
-  if (!open) {
+  if (!embedded && !open) {
     return (
       <button
         type="button"
@@ -86,13 +92,15 @@ export function TripEditForm(props: TripEditFormProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-ink-200/70 bg-white p-5 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-ink-900">Edit trip details</h3>
-        <button type="button" onClick={() => setOpen(false)} className="text-ink-400 hover:text-ink-700">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+    <div className={embedded ? "space-y-3" : "rounded-2xl border border-ink-200/70 bg-white p-5 space-y-3"}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-ink-900">Edit trip details</h3>
+          <button type="button" onClick={close} className="text-ink-400 hover:text-ink-700">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <Field label="Purpose">
         <select
@@ -137,7 +145,7 @@ export function TripEditForm(props: TripEditFormProps) {
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={close}
           className="rounded-xl border border-ink-200 px-4 py-2.5 text-sm font-semibold text-ink-600 hover:bg-ink-50"
         >
           Cancel
