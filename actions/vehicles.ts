@@ -57,6 +57,61 @@ export async function updateVehicle(formData: FormData): Promise<ActionResult> {
   return { success: true };
 }
 
+/**
+ * Set a vehicle's operational status from a row menu.
+ *
+ * Deliberately a targeted UPDATE rather than a trip through updateVehicle():
+ * that action rebuilds the WHOLE vehicle object from FormData, so posting a
+ * status-only form would blank every other column. 'on_trip' is excluded — it is
+ * owned by the trip lifecycle trigger, not by hand. 'decommissioned' goes
+ * through decommissionVehicle() so a reason + date are always recorded.
+ */
+export async function setVehicleStatus(
+  vehicleId: string,
+  status: "available" | "maintenance" | "workshop",
+): Promise<ActionResult> {
+  await requireRole("fleet_manager", "admin");
+  if (!["available", "maintenance", "workshop"].includes(status)) {
+    return { error: "That status can't be set by hand." };
+  }
+
+  const supabase = await createClient();
+  const { data: veh } = await supabase
+    .schema("app")
+    .from("vehicles")
+    .select("status")
+    .eq("id", vehicleId)
+    .maybeSingle<{ status: string }>();
+  if (!veh) return { error: "Vehicle not found." };
+  if (veh.status === "on_trip") {
+    return { error: "This vehicle is out on a trip — end the trip first." };
+  }
+
+  const { error } = await supabase.schema("app").from("vehicles").update({ status }).eq("id", vehicleId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidatePath("/vehicles");
+  revalidatePath("/live");
+  return { success: true };
+}
+
+/** Bring a decommissioned vehicle back into the fleet. */
+export async function reinstateVehicle(vehicleId: string): Promise<ActionResult> {
+  await requireRole("fleet_manager", "admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("app")
+    .from("vehicles")
+    .update({ status: "available", decommissioned_at: null, decommission_reason: null })
+    .eq("id", vehicleId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidatePath("/vehicles");
+  return { success: true };
+}
+
 /** Decommission a vehicle — sets status + decommissioned_at. */
 export async function decommissionVehicle(
   vehicleId: string,

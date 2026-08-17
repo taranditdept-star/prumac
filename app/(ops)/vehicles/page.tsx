@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { VehicleStatusBadge } from "@/components/primitives/VehicleStatusBadge";
+import { VehicleRowActions } from "@/components/ops/VehicleRowActions";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
 import type { VehicleRow, DocumentRow } from "@/types/domain";
 
@@ -20,7 +21,8 @@ export default async function VehiclesPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  await requireRole("fleet_manager", "admin");
+  const profile = await requireRole("fleet_manager", "admin");
+  const isAdmin = profile.role === "admin";
   const { q: qRaw } = await searchParams;
   const q = (qRaw ?? "").trim().toLowerCase();
   const supabase = await createClient();
@@ -33,6 +35,14 @@ export default async function VehiclesPage({
     .order("make")
     .order("model")
     .returns<VehicleRow[]>();
+
+  // Needed by the inline edit drawer in each row's actions menu.
+  const { data: subsidiaries } = await supabase
+    .schema("app")
+    .from("subsidiaries")
+    .select("id, name")
+    .order("name")
+    .returns<{ id: string; name: string }[]>();
 
   const { data: docs } = await supabase
     .schema("app")
@@ -236,13 +246,17 @@ export default async function VehiclesPage({
                         <span className="text-xs text-ink-400">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/vehicles/${v.id}`}
-                        className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/vehicles/${v.id}`}
+                          aria-label="Open vehicle"
+                          className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
+                        >
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                        <VehicleRowActions vehicle={v} subsidiaries={subsidiaries ?? []} isAdmin={isAdmin} />
+                      </div>
                     </td>
                   </tr>
                 );
