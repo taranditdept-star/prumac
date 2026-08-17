@@ -8,6 +8,9 @@ import {
   newShareToken, newSharePassword, hashSharePassword, verifySharePassword,
   shareCookieName, signShareSession, readShareSession, MAX_ATTEMPTS, LOCK_MINUTES,
 } from "@/lib/evidence/share";
+import { VERDICT_OPTIONS } from "@/lib/evidence/verdicts";
+
+const VERDICT_VALUES: string[] = VERDICT_OPTIONS.map((o) => o.value);
 
 export type ShareResult<T = void> = { error: string } | { success: true; data?: T };
 
@@ -91,9 +94,9 @@ export async function resetAccidentSharePassword(shareId: string): Promise<Share
   const { data: row } = await service
     .schema("app")
     .from("accident_shares")
-    .select("accident_id")
+    .select("accident_id, password_version")
     .eq("id", shareId)
-    .maybeSingle<{ accident_id: string }>();
+    .maybeSingle<{ accident_id: string; password_version: number }>();
   if (!row) return { error: "That link no longer exists." };
 
   const password = newSharePassword();
@@ -101,7 +104,15 @@ export async function resetAccidentSharePassword(shareId: string): Promise<Share
   const { error } = await service
     .schema("app")
     .from("accident_shares")
-    .update({ password_hash: hash, password_salt: salt, failed_attempts: 0, locked_until: null })
+    .update({
+      password_hash: hash,
+      password_salt: salt,
+      // Bumping the version invalidates any viewing session opened with the old
+      // password — otherwise a leaked password kept working for hours after this.
+      password_version: (row.password_version ?? 1) + 1,
+      failed_attempts: 0,
+      locked_until: null,
+    })
     .eq("id", shareId);
   if (error) return { error: error.message };
 
@@ -125,14 +136,14 @@ export async function unlockAccidentShare(token: string, password: string): Prom
   const { data: share } = await service
     .schema("app")
     .from("accident_shares")
-    .select("id, password_hash, password_salt, revoked_at, failed_attempts, locked_until")
+    .select("id, password_hash, password_salt, password_version, revoked_at, locked_until")
     .eq("token", t)
     .maybeSingle<{
       id: string;
       password_hash: string;
       password_salt: string;
+      password_version: number;
       revoked_at: string | null;
-      failed_attempts: number;
       locked_until: string | null;
     }>();
 
@@ -145,30 +156,25 @@ export async function unlockAccidentShare(token: string, password: string): Prom
     return { error: `Too many wrong attempts. Try again in ${LOCK_MINUTES} minutes.` };
   }
 
-  if (!verifySharePassword(p, share.password_hash, share.password_salt)) {
-    const attempts = (share.failed_attempts ?? 0) + 1;
-    const lock = attempts >= MAX_ATTEMPTS ? new Date(Date.now() + LOCK_MINUTES * 60_000).toISOString() : null;
-    await service
+  if (!(await verifySharePassword(p, share.password_hash, share.password_salt))) {
+    // ONE atomic statement does the increment + lock decision. Doing it as a
+    // read-then-write in JS let parallel attempts all read the same counter, so
+    // the "8 then lock" rule could be sidestepped by firing requests at once.
+    const { data: reg } = await service
       .schema("app")
-      .from("accident_shares")
-      .update({ failed_attempts: lock ? 0 : attempts, locked_until: lock })
-      .eq("id", share.id);
-    return lock ? { error: `Too many wrong attempts. Try again in ${LOCK_MINUTES} minutes.` } : generic;
+      .rpc("fn_share_register_failure", {
+        p_share_id: share.id,
+        p_max_attempts: MAX_ATTEMPTS,
+        p_lock_minutes: LOCK_MINUTES,
+      })
+      .maybeSingle<{ locked: boolean; attempts: number }>();
+    return reg?.locked ? { error: `Too many wrong attempts. Try again in ${LOCK_MINUTES} minutes.` } : generic;
   }
 
-  // Correct — clear the counter, record the view, set the session cookie.
-  await service
-    .schema("app")
-    .from("accident_shares")
-    .update({
-      failed_attempts: 0,
-      locked_until: null,
-      last_viewed_at: new Date().toISOString(),
-      view_count: (await currentViewCount(share.id)) + 1,
-    })
-    .eq("id", share.id);
+  // Correct — record the view (atomic) and clear the throttle.
+  await service.schema("app").rpc("fn_share_register_view", { p_share_id: share.id });
 
-  const { value, maxAge } = signShareSession(share.id);
+  const { value, maxAge } = signShareSession(share.id, share.password_version ?? 1);
   const store = await cookies();
   store.set(shareCookieName(t), value, {
     httpOnly: true,
@@ -181,17 +187,6 @@ export async function unlockAccidentShare(token: string, password: string): Prom
   return { success: true };
 }
 
-async function currentViewCount(shareId: string): Promise<number> {
-  const service = createServiceClient();
-  const { data } = await service
-    .schema("app")
-    .from("accident_shares")
-    .select("view_count")
-    .eq("id", shareId)
-    .maybeSingle<{ view_count: number }>();
-  return data?.view_count ?? 0;
-}
-
 /** A viewer records their verdict + comment on the report. */
 export async function submitAccidentVerdict(
   token: string,
@@ -202,22 +197,31 @@ export async function submitAccidentVerdict(
   const role = (input.author_role ?? "").trim().slice(0, 60);
   const comment = (input.comment ?? "").trim().slice(0, 4000);
   if (!name) return { error: "Please give your name." };
-  if (!input.verdict) return { error: "Choose a verdict." };
+  // Validate against the known set rather than letting Postgres reject it — a raw
+  // constraint error would leak schema/constraint names to an anonymous caller.
+  if (!VERDICT_VALUES.includes(input.verdict)) return { error: "Choose a verdict from the list." };
 
   const service = createServiceClient();
   const { data: share } = await service
     .schema("app")
     .from("accident_shares")
-    .select("id, accident_id, revoked_at, allow_verdict")
+    .select("id, accident_id, revoked_at, allow_verdict, password_version")
     .eq("token", t)
-    .maybeSingle<{ id: string; accident_id: string; revoked_at: string | null; allow_verdict: boolean }>();
+    .maybeSingle<{
+      id: string;
+      accident_id: string;
+      revoked_at: string | null;
+      allow_verdict: boolean;
+      password_version: number;
+    }>();
   if (!share || share.revoked_at) return { error: "This link is no longer active." };
   if (!share.allow_verdict) return { error: "This link is view-only." };
 
-  // Must hold a valid viewing session for THIS link — the password gate is the
-  // only way to get one, so an anonymous POST can't slip a verdict in.
+  // Must hold a valid viewing session for THIS link at the CURRENT password
+  // version — the password gate is the only way to get one, so an anonymous POST
+  // can't slip a verdict in, and a reset password locks the old session out.
   const store = await cookies();
-  if (!readShareSession(store.get(shareCookieName(t))?.value, share.id)) {
+  if (!readShareSession(store.get(shareCookieName(t))?.value, share.id, share.password_version ?? 1)) {
     return { error: "Your viewing session expired — please enter the password again." };
   }
 
@@ -229,7 +233,10 @@ export async function submitAccidentVerdict(
     verdict: input.verdict,
     comment: comment || null,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("verdict insert failed", error.message);
+    return { error: "Couldn't save your verdict — please try again." };
+  }
 
   revalidatePath(`/accidents/${share.accident_id}`);
   revalidatePath(`/report/${t}`);

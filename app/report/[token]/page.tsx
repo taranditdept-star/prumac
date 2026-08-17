@@ -44,6 +44,25 @@ function fmt(iso: string): string {
   });
 }
 
+/**
+ * third_party_details is free-form jsonb. Rendering it with JSON.stringify put
+ * raw braces in front of the CEO/HR — and printed a bare "{}" when other parties
+ * were involved but nothing was recorded. Turn it into readable lines instead.
+ */
+function thirdPartyText(a: Pick<AccidentRow, "other_parties_involved" | "third_party_details">): string {
+  if (!a.other_parties_involved) return "None";
+  const d = a.third_party_details;
+  if (d == null) return "Yes — no details recorded";
+  if (typeof d === "string") return d.trim() || "Yes — no details recorded";
+  if (typeof d === "object") {
+    const entries = Object.entries(d as Record<string, unknown>)
+      .filter(([, v]) => v != null && String(v).trim() !== "")
+      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${String(v)}`);
+    return entries.length ? entries.join(" · ") : "Yes — no details recorded";
+  }
+  return String(d);
+}
+
 const SEV: Record<string, string> = {
   minor: "bg-ink-100 text-ink-700",
   moderate: "bg-amber-100 text-amber-800",
@@ -58,7 +77,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
   const { data: share } = await service
     .schema("app")
     .from("accident_shares")
-    .select("id, accident_id, recipient_label, allow_verdict, revoked_at")
+    .select("id, accident_id, recipient_label, allow_verdict, revoked_at, password_version")
     .eq("token", token)
     .maybeSingle<{
       id: string;
@@ -66,6 +85,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
       recipient_label: string | null;
       allow_verdict: boolean;
       revoked_at: string | null;
+      password_version: number;
     }>();
 
   if (!share || share.revoked_at) {
@@ -87,7 +107,11 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
 
   // The link password is the credential — no session, no access.
   const store = await cookies();
-  const unlocked = readShareSession(store.get(shareCookieName(token))?.value, share.id);
+  const unlocked = readShareSession(
+    store.get(shareCookieName(token))?.value,
+    share.id,
+    share.password_version ?? 1,
+  );
   if (!unlocked) {
     return (
       <Shell>
@@ -130,7 +154,9 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
     );
   }
 
-  // The driver's own scene photos join the gallery as photo items.
+  // Committee evidence is served through our own route, NOT the raw signed URL:
+  // that way revoking the link (or resetting the password) cuts media access off
+  // at once instead of leaving hours-long bearer URLs in the wild.
   const items: GalleryItem[] = [
     ...scenePhotos.map((p, i) => ({
       id: `scene-${i}`,
@@ -142,7 +168,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
       caption: null,
       created_at: accident.reported_at,
     })),
-    ...evidence,
+    ...evidence.map((e) => ({ ...e, url: `/report/${token}/media/${e.id}` })),
   ];
 
   return (
@@ -193,10 +219,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
             <Detail label="Weather" value={accident.weather} />
             <Detail label="Road conditions" value={accident.road_conditions} />
             <Detail label="Injuries" value={accident.injuries ? accident.injuries_details || "Yes" : "None reported"} />
-            <Detail
-              label="Third parties"
-              value={accident.other_parties_involved ? JSON.stringify(accident.third_party_details ?? {}) : "None"}
-            />
+            <Detail label="Third parties" value={thirdPartyText(accident)} />
             <Detail label="Police report no." value={accident.police_report_number} />
             <Detail label="Police station" value={accident.police_station} />
           </dl>

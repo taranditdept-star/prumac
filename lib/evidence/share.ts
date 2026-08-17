@@ -1,5 +1,12 @@
 import "server-only";
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scrypt as scryptCb, scryptSync, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+
+const scryptAsync = promisify(scryptCb) as (
+  password: string,
+  salt: string,
+  keylen: number,
+) => Promise<Buffer>;
 
 /**
  * Share-link crypto.
@@ -43,9 +50,14 @@ export function hashSharePassword(password: string): { hash: string; salt: strin
   return { hash, salt };
 }
 
-export function verifySharePassword(password: string, hash: string, salt: string): boolean {
+/**
+ * ASYNC on purpose: scrypt is memory-hard and scryptSync blocks the event loop
+ * for tens of ms. An unauthenticated caller can hit the unlock endpoint in
+ * parallel, so a synchronous hash would let them stall the whole server.
+ */
+export async function verifySharePassword(password: string, hash: string, salt: string): Promise<boolean> {
   try {
-    const candidate = scryptSync(password, salt, SCRYPT_KEYLEN);
+    const candidate = await scryptAsync(password, salt, SCRYPT_KEYLEN);
     const expected = Buffer.from(hash, "hex");
     if (expected.length !== candidate.length) return false;
     return timingSafeEqual(candidate, expected);
@@ -64,24 +76,34 @@ export function shareCookieName(token: string): string {
   return SHARE_COOKIE_PREFIX + token.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
 }
 
-export function signShareSession(shareId: string): { value: string; maxAge: number } {
+/**
+ * The password VERSION is part of the signed payload, so issuing a new password
+ * instantly invalidates sessions already open on the old one. Without it, the
+ * "New password" button left a leaked-password holder inside for up to 6 hours.
+ */
+export function signShareSession(shareId: string, passwordVersion: number): { value: string; maxAge: number } {
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-  const payload = `${shareId}.${exp}`;
+  const payload = `${shareId}.${passwordVersion}.${exp}`;
   const mac = createHmac("sha256", secret()).update(payload).digest("base64url");
   return { value: `${payload}.${mac}`, maxAge: SESSION_TTL_SECONDS };
 }
 
-/** Returns the shareId the cookie proves access to, or null. */
-export function readShareSession(cookieValue: string | undefined, expectShareId: string): boolean {
+/** True when the cookie proves current access to THIS share at THIS password version. */
+export function readShareSession(
+  cookieValue: string | undefined,
+  expectShareId: string,
+  expectPasswordVersion: number,
+): boolean {
   if (!cookieValue) return false;
   const parts = cookieValue.split(".");
-  if (parts.length !== 3) return false;
-  const [shareId, expStr, mac] = parts;
+  if (parts.length !== 4) return false;
+  const [shareId, verStr, expStr, mac] = parts;
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return false;
   if (shareId !== expectShareId) return false;
+  if (Number(verStr) !== expectPasswordVersion) return false;
 
-  const expected = createHmac("sha256", secret()).update(`${shareId}.${expStr}`).digest("base64url");
+  const expected = createHmac("sha256", secret()).update(`${shareId}.${verStr}.${expStr}`).digest("base64url");
   const a = Buffer.from(mac);
   const b = Buffer.from(expected);
   if (a.length !== b.length) return false;

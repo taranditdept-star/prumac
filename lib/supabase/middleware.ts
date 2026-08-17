@@ -28,11 +28,16 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Use getSession() (reads/refreshes via cookies) instead of getUser() (a
-  // network round-trip to the Auth server on EVERY request). Over a high-latency
-  // link to Supabase that round-trip was ~770ms per page. Data stays protected:
-  // Postgres verifies the JWT signature on every query (RLS), so a forged cookie
-  // can pass this redirect check but cannot read any data.
+  // getSession() only decodes the cookie (no network round-trip), which keeps
+  // every navigation fast. It is deliberately NOT an authorization decision: a
+  // forged cookie can pass this check, so all it buys is "send anonymous
+  // visitors to /login".
+  //
+  // The real gate is lib/auth/session.ts, which calls getUser() and therefore
+  // VERIFIES the token before any requireAuth/requireRole decision. Do not move
+  // authorization here, and do not "optimise" session.ts back to getSession() —
+  // many server actions read/write with the service client, so RLS is not a
+  // backstop for them.
   const {
     data: { session },
   } = await supabase.auth.getSession();

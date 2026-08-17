@@ -29,18 +29,29 @@ const cachedProfileById = unstable_cache(
 );
 
 /**
- * Load the authed user's profile. `getSession()` reads the cookie locally (no
- * network — the proxy already validated it) and the profile is cached for 60s,
- * so most navigations make ZERO auth round-trips. React `cache()` dedupes
- * within a single render (layout + page share one call).
+ * Load the authed user's profile.
+ *
+ * SECURITY: this MUST use getUser(), which verifies the access token with the
+ * auth server. getSession() only base64-decodes the cookie and checks that a few
+ * keys exist — it never validates the signature. Because the profile is then
+ * resolved with the SERVICE client (RLS-bypassing, so it can run inside
+ * unstable_cache), a forged cookie carrying any known admin's user id used to
+ * come back as a genuine admin ProfileRow and satisfy requireRole("admin").
+ * Every server action in this app authorises through requireAuth/requireRole, so
+ * that single unverified read was an app-wide privilege escalation — RLS is NOT
+ * the backstop here, precisely because these paths use the service client.
+ *
+ * React `cache()` dedupes it within a render (layout + page share one call), and
+ * the profile row itself is still cached 60s, so this costs one verified auth
+ * call per request — cheap now that Vercel runs in cdg1 alongside Supabase.
  */
 const loadProfile = cache(async (): Promise<ProfileRow | null> => {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return null;
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) return null;
   return cachedProfileById(user.id);
 });
 
