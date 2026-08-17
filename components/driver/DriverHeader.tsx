@@ -2,8 +2,9 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, LogOut, Phone, IdCard, X, ShieldCheck } from "lucide-react";
+import { Bell, LogOut, Phone, IdCard, X, ShieldCheck, UserPen, ChevronRight } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import { Logo } from "@/components/brand/Logo";
 
@@ -166,6 +167,23 @@ export function DriverHeader({
                     />
                   )}
                 </div>
+
+                {/* Edit own details — drivers keep their own licence, phone and
+                    next-of-kin current instead of phoning the office. */}
+                <Link
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="mt-4 flex h-14 w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-4 text-left active:scale-[0.99] transition-transform"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                    <UserPen className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold text-ink-900">Edit my details</span>
+                    <span className="block text-xs text-ink-500">Name, phone, licence, next of kin</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                </Link>
 
                 {/* Sign out */}
                 <button
