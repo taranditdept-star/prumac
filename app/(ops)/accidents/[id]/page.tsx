@@ -9,6 +9,7 @@ import { PhotoGallery } from "@/components/primitives/PhotoGallery";
 import { AccidentStatusUpdater } from "@/components/ops/AccidentStatusUpdater";
 import { AccidentEvidencePanel } from "@/components/ops/AccidentEvidencePanel";
 import { AccidentSharePanel, type ShareRow, type VerdictRow } from "@/components/ops/AccidentSharePanel";
+import { AccidentAnalysisPanel, type DocItem } from "@/components/ops/AccidentAnalysisPanel";
 import { getAccidentEvidence } from "@/lib/evidence/media";
 import type { CountryCode } from "@/types/domain";
 
@@ -87,6 +88,21 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
   ]);
 
   if (!accident) notFound();
+
+  // Documents whose text can be read/compared, and Chitsano's own assessment
+  // (stored as a verdict row so it sits alongside the human ones).
+  const { data: docRows } = await supabase
+    .schema("app")
+    .from("accident_media")
+    .select("id, original_filename, source, source_detail, extracted_text, extracted_at, kind")
+    .eq("accident_id", id)
+    .in("kind", ["document"])
+    .order("created_at", { ascending: true })
+    .returns<(DocItem & { kind: string })[]>();
+  const docItems: DocItem[] = (docRows ?? []).map(({ kind, ...d }) => d);
+  const chitsanoVerdict =
+    (verdicts ?? []).find((v) => v.author_name === "Chitsano AI") ?? null;
+  const humanVerdicts = (verdicts ?? []).filter((v) => v.author_name !== "Chitsano AI");
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
@@ -225,6 +241,14 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
           {/* Committee-added evidence: photos, video, audio statements, documents */}
           <AccidentEvidencePanel accidentId={id} items={evidence} />
 
+          {/* Driver's account vs the committee's report + Chitsano's comparison */}
+          <AccidentAnalysisPanel
+            accidentId={id}
+            driverStatement={accident.description ?? ""}
+            documents={docItems}
+            chitsano={chitsanoVerdict}
+          />
+
           {/* Password-protected sharing + the verdicts that come back. Admin only:
               createAccidentShare/revoke are requireRole('admin'), so a manager
               must not be shown controls that would just bounce them. */}
@@ -232,7 +256,7 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
             <AccidentSharePanel
               accidentId={id}
               shares={shares ?? []}
-              verdicts={verdicts ?? []}
+              verdicts={humanVerdicts}
               baseUrl={baseUrl}
             />
           )}
