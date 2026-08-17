@@ -10,6 +10,7 @@ import {
   tripStartSchema,
   tripEndSchema,
   tripCancelSchema,
+  tripEditSchema,
 } from "@/lib/validation/trip";
 
 export type ActionResult<T = void> =
@@ -331,6 +332,92 @@ export async function reconcileTrip(tripId: string): Promise<ActionResult> {
   revalidatePath(`/trips/${tripId}`);
   revalidatePath(`/reconciliation/${tripId}`);
   revalidatePath("/reconciliation");
+  return { success: true };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// EDIT trip data — manager/admin correction of an existing trip.
+// Edits the DATA fields only (route, purpose, odometers, fuel, loads), never
+// the status (that stays with the lifecycle actions + state-machine trigger).
+// A completed trip's odometer edit ripples into the vehicle odometer and a
+// re-reconciliation, so those are handled explicitly here.
+// ───────────────────────────────────────────────────────────────────────────
+export async function updateTrip(formData: FormData): Promise<ActionResult> {
+  await requireRole("fleet_manager", "admin");
+
+  const parsed = tripEditSchema.safeParse({
+    trip_id: formData.get("trip_id"),
+    purpose: formData.get("purpose"),
+    route_description: formData.get("route_description") || null,
+    origin_label: formData.get("origin_label") || null,
+    destination_label: formData.get("destination_label") || null,
+    start_odometer_km: formData.get("start_odometer_km"),
+    end_odometer_km: formData.get("end_odometer_km") || null,
+    fuel_litres: formData.get("fuel_litres") || null,
+    fuel_amount: formData.get("fuel_amount") || null,
+    load_count: formData.get("load_count") || null,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const { data: trip } = await supabase
+    .schema("app")
+    .from("trips")
+    .select("id, status, vehicle_id")
+    .eq("id", d.trip_id)
+    .single<{ id: string; status: string; vehicle_id: string }>();
+  if (!trip) return { error: "Trip not found" };
+
+  const end = d.end_odometer_km ?? null;
+  if (end != null) {
+    if (end < d.start_odometer_km) return { error: "End odometer cannot be less than the start odometer." };
+    if (end - d.start_odometer_km > 5000) {
+      return { error: "That is over 5,000 km for one trip — check the odometer values." };
+    }
+  }
+
+  const { error } = await supabase
+    .schema("app")
+    .from("trips")
+    .update({
+      purpose: d.purpose,
+      route_description: d.route_description ?? null,
+      origin_label: d.origin_label ?? null,
+      destination_label: d.destination_label ?? null,
+      start_odometer_km: d.start_odometer_km,
+      end_odometer_km: end,
+      fuel_litres: d.fuel_litres ?? null,
+      fuel_amount: d.fuel_amount ?? null,
+      load_count: d.load_count ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", d.trip_id);
+  if (error) return { error: error.message };
+
+  // A completed trip already advanced the vehicle odometer and ran
+  // reconciliation against the old figures — re-do both so they stay correct.
+  if (trip.status === "completed") {
+    if (end != null) {
+      const { data: veh } = await supabase
+        .schema("app")
+        .from("vehicles")
+        .select("current_odometer_km")
+        .eq("id", trip.vehicle_id)
+        .single<{ current_odometer_km: number }>();
+      // Odometers only move forward — never lower the vehicle's reading.
+      if (veh && end > veh.current_odometer_km) {
+        await supabase.schema("app").from("vehicles").update({ current_odometer_km: end }).eq("id", trip.vehicle_id);
+      }
+    }
+    const { error: recErr } = await supabase.schema("app").rpc("fn_reconcile_trip", { p_trip_id: d.trip_id });
+    if (recErr) console.error("Re-reconciliation failed for trip", d.trip_id, recErr.message);
+  }
+
+  revalidatePath(`/trips/${d.trip_id}`);
+  revalidatePath("/trips");
+  revalidatePath("/reconciliation");
+  revalidatePath("/live");
   return { success: true };
 }
 

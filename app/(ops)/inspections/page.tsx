@@ -120,29 +120,16 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4">
                     {i.vehicles && (
-                      i.trip_id ? (
-                        <Link href={`/trips/${i.trip_id}`} className="block">
-                          <PlateBadge
-                            plate={i.vehicles.plate_number}
-                            country={i.vehicles.plate_country}
-                            size="sm"
-                          />
-                          <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
-                            {i.vehicles.make} {i.vehicles.model}
-                          </p>
-                        </Link>
-                      ) : (
-                        <div className="block">
-                          <PlateBadge
-                            plate={i.vehicles.plate_number}
-                            country={i.vehicles.plate_country}
-                            size="sm"
-                          />
-                          <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
-                            {i.vehicles.make} {i.vehicles.model}
-                          </p>
-                        </div>
-                      )
+                      <Link href={`/inspections/${i.id}`} className="block">
+                        <PlateBadge
+                          plate={i.vehicles.plate_number}
+                          country={i.vehicles.plate_country}
+                          size="sm"
+                        />
+                        <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
+                          {i.vehicles.make} {i.vehicles.model}
+                        </p>
+                      </Link>
                     )}
                   </td>
                   <td className="px-6 py-4 text-ink-700">
@@ -153,14 +140,12 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{fmt(i.completed_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    {i.trip_id && (
-                      <Link
-                        href={`/trips/${i.trip_id}`}
-                        className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
-                    )}
+                    <Link
+                      href={`/inspections/${i.id}`}
+                      className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
                   </td>
                 </tr>
               ))}

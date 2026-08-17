@@ -10,6 +10,7 @@ import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
 import { PhotoGallery } from "@/components/primitives/PhotoGallery";
 import { TripActions } from "@/components/ops/TripActions";
+import { TripEditForm } from "@/components/ops/TripEditForm";
 import { ReconciliationBadge } from "@/components/primitives/ReconciliationBadge";
 import type { CountryCode, ReconciliationStatus, TripStatus } from "@/types/domain";
 
@@ -29,6 +30,7 @@ interface TripDetail {
   fuel_litres: number | null;
   fuel_amount: number | null;
   fuel_currency: string | null;
+  load_count: number | null;
   planned_start_at: string | null;
   started_at: string | null;
   paused_at: string | null;
@@ -312,6 +314,19 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             status={trip.status}
             startOdometer={trip.start_odometer_km}
             isManager={profile.role === "fleet_manager" || profile.role === "admin"}
+          />
+
+          <TripEditForm
+            tripId={trip.id}
+            purpose={trip.purpose}
+            routeDescription={trip.route_description}
+            originLabel={trip.origin_label}
+            destinationLabel={trip.destination_label}
+            startOdometer={trip.start_odometer_km}
+            endOdometer={trip.end_odometer_km}
+            fuelLitres={trip.fuel_litres}
+            fuelAmount={trip.fuel_amount}
+            loadCount={trip.load_count}
           />
 
           {rec && (

@@ -29,6 +29,23 @@ export const tripCancelSchema = z.object({
   reason: z.string().min(3, "Reason is required").max(500),
 });
 
+// Manager/admin correction of an existing trip's data (not its status).
+export const tripEditSchema = z.object({
+  trip_id: uuid(),
+  purpose: z.enum(PURPOSES),
+  route_description: z.string().max(500).nullable().optional(),
+  origin_label: z.string().max(120).nullable().optional(),
+  destination_label: z.string().max(120).nullable().optional(),
+  start_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+  end_odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
+  fuel_litres: z.coerce.number().min(0).max(2000).nullable().optional(),
+  fuel_amount: z.coerce.number().min(0).max(100000).nullable().optional(),
+  load_count: z.coerce.number().int().min(0).max(1000).nullable().optional(),
+});
+
+export const TRIP_PURPOSES = PURPOSES;
+
 export type TripStartInput = z.infer<typeof tripStartSchema>;
 export type TripEndInput = z.infer<typeof tripEndSchema>;
 export type TripCancelInput = z.infer<typeof tripCancelSchema>;
+export type TripEditInput = z.infer<typeof tripEditSchema>;
