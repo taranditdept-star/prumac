@@ -51,7 +51,7 @@ type State = "hidden" | "prompt";
  * after a redeploy rotates the SW). Push delivery needs the service worker,
  * which only registers in a production build over HTTPS/localhost.
  */
-export function PushAlerts() {
+export function PushAlerts({ variant = "ops" }: { variant?: "ops" | "driver" }) {
   const [state, setState] = useState<State>("hidden");
 
   useEffect(() => {
@@ -105,9 +105,13 @@ export function PushAlerts() {
           <BellRing className="h-5 w-5 text-orange-600" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-ink-900">Enable emergency alerts</p>
+          <p className="text-sm font-bold text-ink-900">
+            {variant === "driver" ? "Turn on notifications" : "Enable emergency alerts"}
+          </p>
           <p className="mt-1 text-xs leading-relaxed text-ink-500">
-            Ring this device the moment a driver reports an accident — even when the app is closed.
+            {variant === "driver"
+              ? "Get messages from the office and trip reminders on this phone — even when the app is closed."
+              : "Ring this device the moment a driver reports an accident — even when the app is closed."}
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
