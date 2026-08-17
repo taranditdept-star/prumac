@@ -7,6 +7,9 @@ import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { AccidentSeverityBadge, AccidentStatusBadge } from "@/components/primitives/SeverityBadge";
 import { PhotoGallery } from "@/components/primitives/PhotoGallery";
 import { AccidentStatusUpdater } from "@/components/ops/AccidentStatusUpdater";
+import { AccidentEvidencePanel } from "@/components/ops/AccidentEvidencePanel";
+import { AccidentSharePanel, type ShareRow, type VerdictRow } from "@/components/ops/AccidentSharePanel";
+import { getAccidentEvidence } from "@/lib/evidence/media";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +47,12 @@ function fmt(iso: string): string {
 
 export default async function AccidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireRole("fleet_manager", "admin");
+  const profile = await requireRole("fleet_manager", "admin");
+  const isAdmin = profile.role === "admin";
   const supabase = await createClient();
+  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://prumac.vercel.app").replace(/\/$/, "");
 
-  const [{ data: accident }, { data: photos }] = await Promise.all([
+  const [{ data: accident }, { data: photos }, evidence, { data: shares }, { data: verdicts }] = await Promise.all([
     supabase
       .schema("app")
       .from("accidents")
@@ -64,6 +69,21 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
       .select("file_path")
       .eq("accident_id", id)
       .returns<PhotoRow[]>(),
+    getAccidentEvidence(id),
+    supabase
+      .schema("app")
+      .from("accident_shares")
+      .select("id, token, recipient_label, created_at, revoked_at, last_viewed_at, view_count")
+      .eq("accident_id", id)
+      .order("created_at", { ascending: false })
+      .returns<ShareRow[]>(),
+    supabase
+      .schema("app")
+      .from("accident_verdicts")
+      .select("id, author_name, author_role, verdict, comment, created_at")
+      .eq("accident_id", id)
+      .order("created_at", { ascending: false })
+      .returns<VerdictRow[]>(),
   ]);
 
   if (!accident) notFound();
@@ -198,9 +218,24 @@ export default async function AccidentDetailPage({ params }: { params: Promise<{
           )}
 
           <section>
-            <h2 className="text-base font-bold text-ink-900 mb-3">Scene photos</h2>
+            <h2 className="text-base font-bold text-ink-900 mb-3">Scene photos (from the driver)</h2>
             <PhotoGallery paths={(photos ?? []).map((p) => p.file_path)} />
           </section>
+
+          {/* Committee-added evidence: photos, video, audio statements, documents */}
+          <AccidentEvidencePanel accidentId={id} items={evidence} />
+
+          {/* Password-protected sharing + the verdicts that come back. Admin only:
+              createAccidentShare/revoke are requireRole('admin'), so a manager
+              must not be shown controls that would just bounce them. */}
+          {isAdmin && (
+            <AccidentSharePanel
+              accidentId={id}
+              shares={shares ?? []}
+              verdicts={verdicts ?? []}
+              baseUrl={baseUrl}
+            />
+          )}
         </div>
 
         <div className="space-y-4">

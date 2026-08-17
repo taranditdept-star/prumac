@@ -45,7 +45,12 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/health") ||
     // Cron routes authenticate themselves with CRON_SECRET (Bearer token from
     // Vercel Cron); they have no Supabase session, so skip the redirect.
-    pathname.startsWith("/api/cron");
+    pathname.startsWith("/api/cron") ||
+    // Shared accident reports are opened by the CEO / HR / committee, who have
+    // no app account. The page authenticates them itself with the link password
+    // (see actions/accident-share.ts) — this proxy is only a navigation gate, so
+    // authorization for /report MUST stay inside the page.
+    pathname.startsWith("/report");
 
   if (DEBUG && !pathname.startsWith("/_next") && !pathname.startsWith("/favicon")) {
     const sbCookies = request.cookies
