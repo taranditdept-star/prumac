@@ -22,8 +22,16 @@ export default async function UsersAdminPage() {
     service
       .schema("app")
       .from("profiles")
-      .select("id, full_name, email, role, is_active")
-      .returns<{ id: string; full_name: string | null; email: string | null; role: AppRole; is_active: boolean | null }[]>(),
+      .select("id, full_name, email, role, is_active, access_status, access_reason")
+      .returns<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        role: AppRole;
+        is_active: boolean | null;
+        access_status: "active" | "suspended" | "deactivated" | null;
+        access_reason: string | null;
+      }[]>(),
     service
       .schema("app")
       .from("drivers")
@@ -45,6 +53,8 @@ export default async function UsersAdminPage() {
         active: p.is_active !== false,
         onboardingPending: d?.licence_number === "IMPORT-PENDING",
         isDriver: !!d || p.role === "driver",
+        accessStatus: p.access_status ?? "active",
+        accessReason: p.access_reason ?? null,
       };
     })
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.name.localeCompare(b.name));

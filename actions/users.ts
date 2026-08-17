@@ -165,20 +165,41 @@ export async function resetUserPassword(profileId: string): Promise<UserActionRe
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Activate / deactivate an account (bans the login + flips is_active flags).
+// Set an account's access: active / suspended / deactivated.
+// - active      → lift the login ban, restore data access (is_active = true)
+// - suspended   → temporary block with a reason (login banned, is_active false)
+// - deactivated → permanent block until reactivated (login banned)
+// Login blocking rides on the Supabase auth ban; is_active drives RLS; the
+// status + reason are what the Accounts screen shows.
 // ───────────────────────────────────────────────────────────────────────────
-export async function setUserActive(profileId: string, active: boolean): Promise<UserActionResult> {
-  await requireRole("admin");
+export async function setUserAccess(
+  profileId: string,
+  status: "active" | "suspended" | "deactivated",
+  reason?: string,
+): Promise<UserActionResult> {
+  const actor = await requireRole("admin");
   const service = createServiceClient();
+  const active = status === "active";
 
   const { error: banErr } = await service.auth.admin.updateUserById(profileId, {
     ban_duration: active ? "none" : "876000h",
   });
   if (banErr) return { error: banErr.message };
 
-  await service.schema("app").from("profiles").update({ is_active: active }).eq("id", profileId);
+  await service.schema("app").from("profiles").update({
+    is_active: active,
+    access_status: status,
+    access_reason: active ? null : reason?.trim() || null,
+    access_changed_at: new Date().toISOString(),
+    access_changed_by: actor.id,
+  }).eq("id", profileId);
   await service.schema("app").from("drivers").update({ is_active: active }).eq("profile_id", profileId);
 
   revalidatePath("/admin/users");
   return { success: true };
+}
+
+// Back-compat wrapper — some callers still toggle a boolean.
+export async function setUserActive(profileId: string, active: boolean): Promise<UserActionResult> {
+  return setUserAccess(profileId, active ? "active" : "deactivated");
 }

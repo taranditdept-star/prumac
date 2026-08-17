@@ -3,12 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Ban, RotateCcw } from "lucide-react";
+import { UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Ban, RotateCcw, PauseCircle } from "lucide-react";
 import {
   createDriverLogin,
   createStaffLogin,
   resetUserPassword,
-  setUserActive,
+  setUserAccess,
   type UserActionResult,
 } from "@/actions/users";
 import type { AppRole } from "@/types/domain";
@@ -21,6 +21,8 @@ export interface AccountRow {
   active: boolean;
   onboardingPending: boolean;
   isDriver: boolean;
+  accessStatus: "active" | "suspended" | "deactivated";
+  accessReason: string | null;
 }
 
 interface Subsidiary {
@@ -76,10 +78,18 @@ export function UserManagement({ accounts, subsidiaries }: { accounts: AccountRo
     if (!confirm(`Reset the password for ${a.name}? Their current password will stop working.`)) return;
     handle(resetUserPassword(a.id));
   }
-  function toggleActive(a: AccountRow) {
-    const verb = a.active ? "Deactivate" : "Reactivate";
-    if (!confirm(`${verb} ${a.name}?`)) return;
-    handle(setUserActive(a.id, !a.active));
+  function suspend(a: AccountRow) {
+    const reason = prompt(`Suspend ${a.name}? They won't be able to log in until you lift it.\n\nReason (shown on the account):`);
+    if (reason === null) return; // cancelled
+    handle(setUserAccess(a.id, "suspended", reason));
+  }
+  function deactivate(a: AccountRow) {
+    if (!confirm(`Deactivate ${a.name}? They will be unable to log in until reactivated.`)) return;
+    handle(setUserAccess(a.id, "deactivated"));
+  }
+  function reactivate(a: AccountRow) {
+    if (!confirm(`Reactivate ${a.name}? They will be able to log in again.`)) return;
+    handle(setUserAccess(a.id, "active"));
   }
 
   return (
@@ -203,14 +213,34 @@ export function UserManagement({ accounts, subsidiaries }: { accounts: AccountRo
                 </td>
                 <td className="px-4 py-3 font-plate text-ink-700">{a.identifier}</td>
                 <td className="px-4 py-3">
-                  {!a.active ? (
-                    <span className="text-xs font-semibold text-ink-400">Deactivated</span>
-                  ) : a.onboardingPending ? (
-                    <span className="text-xs font-semibold text-amber-600">Onboarding pending</span>
+                  {a.active ? (
+                    a.onboardingPending ? (
+                      <span className="text-xs font-semibold text-amber-600">Onboarding pending</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
+                      </span>
+                    )
+                  ) : a.accessStatus === "suspended" ? (
+                    <div>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600">
+                        <PauseCircle className="h-3.5 w-3.5" /> Suspended
+                      </span>
+                      {a.accessReason && (
+                        <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-ink-400" title={a.accessReason}>
+                          {a.accessReason}
+                        </p>
+                      )}
+                    </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
-                    </span>
+                    <div>
+                      <span className="text-xs font-semibold text-ink-400">Deactivated</span>
+                      {a.accessReason && (
+                        <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-ink-400" title={a.accessReason}>
+                          {a.accessReason}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -223,19 +253,35 @@ export function UserManagement({ accounts, subsidiaries }: { accounts: AccountRo
                     >
                       <KeyRound className="h-3.5 w-3.5" /> Reset
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleActive(a)}
-                      disabled={isPending}
-                      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-                        a.active
-                          ? "border-rose-200 text-rose-600 hover:bg-rose-50"
-                          : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                      }`}
-                    >
-                      {a.active ? <Ban className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                      {a.active ? "Deactivate" : "Reactivate"}
-                    </button>
+                    {a.active ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => suspend(a)}
+                          disabled={isPending}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          <PauseCircle className="h-3.5 w-3.5" /> Suspend
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deactivate(a)}
+                          disabled={isPending}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                        >
+                          <Ban className="h-3.5 w-3.5" /> Deactivate
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => reactivate(a)}
+                        disabled={isPending}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Reactivate
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

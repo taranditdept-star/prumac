@@ -234,8 +234,16 @@ export async function deleteDriver(driverId: string): Promise<ActionResult> {
 // DEACTIVATE driver
 // ───────────────────────────────────────────────────────────────────────────
 export async function deactivateDriver(driverId: string, reason: string): Promise<ActionResult> {
-  await requireRole("fleet_manager", "admin");
+  const actor = await requireRole("fleet_manager", "admin");
   const supabase = await createClient();
+
+  const { data: drv } = await supabase
+    .schema("app")
+    .from("drivers")
+    .select("profile_id")
+    .eq("id", driverId)
+    .maybeSingle<{ profile_id: string }>();
+
   const { error } = await supabase
     .schema("app")
     .from("drivers")
@@ -251,8 +259,23 @@ export async function deactivateDriver(driverId: string, reason: string): Promis
     .eq("driver_id", driverId)
     .is("ended_at", null);
 
+  // Block the login too — previously this path left the account able to sign in
+  // (profiles.is_active stayed true and the auth user was never banned).
+  if (drv?.profile_id) {
+    const service = createServiceClient();
+    await service.auth.admin.updateUserById(drv.profile_id, { ban_duration: "876000h" });
+    await service.schema("app").from("profiles").update({
+      is_active: false,
+      access_status: "deactivated",
+      access_reason: reason,
+      access_changed_at: new Date().toISOString(),
+      access_changed_by: actor.id,
+    }).eq("id", drv.profile_id);
+  }
+
   revalidatePath(`/drivers/${driverId}`);
   revalidatePath("/drivers");
+  revalidatePath("/admin/users");
   return { success: true };
 }
 
