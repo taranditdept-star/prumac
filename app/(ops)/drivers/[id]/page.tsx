@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { AssignmentPanel } from "@/components/ops/AssignmentPanel";
 import { DriverEditButton } from "@/components/ops/DriverEditButton";
+import { DriverAccessButton } from "@/components/ops/DriverAccessButton";
 import { DeleteEntityButton } from "@/components/ops/DeleteEntityButton";
 import { DriverInsights } from "@/components/ops/DriverInsights";
 import { DriverScorecard } from "@/components/ops/DriverScorecard";
@@ -19,6 +20,8 @@ interface DriverDetail extends DriverRow {
     phone: string | null;
     avatar_url: string | null;
     subsidiary_id: string | null;
+    access_status: "active" | "suspended" | "deactivated" | null;
+    access_reason: string | null;
   } | null;
 }
 
@@ -93,7 +96,7 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
       supabase
         .schema("app")
         .from("drivers")
-        .select(`*, profiles!inner(full_name, phone, avatar_url, subsidiary_id)`)
+        .select(`*, profiles!inner(full_name, phone, avatar_url, subsidiary_id, access_status, access_reason)`)
         .eq("id", id)
         .single<DriverDetail>(),
       supabase
@@ -207,11 +210,22 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
             </div>
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur px-3 py-1 mb-3 border border-white/10">
-                <span className={`h-1.5 w-1.5 rounded-full ${driver.is_active ? "bg-emerald-400" : "bg-slate-400"}`} />
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    driver.is_active ? "bg-emerald-400" : driver.profiles?.access_status === "suspended" ? "bg-amber-400" : "bg-rose-400"
+                  }`}
+                />
                 <span className="text-[10px] uppercase tracking-[0.14em] text-white font-bold">
-                  {driver.is_active ? "Active driver" : "Inactive"}
+                  {driver.is_active
+                    ? "Active driver"
+                    : driver.profiles?.access_status === "suspended"
+                      ? "Suspended"
+                      : "Deactivated"}
                 </span>
               </div>
+              {!driver.is_active && driver.profiles?.access_reason && (
+                <p className="mb-2 text-xs text-slate-300">Reason: {driver.profiles.access_reason}</p>
+              )}
               <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">{name}</h1>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-300">
                 {driver.profiles?.phone && (
@@ -251,6 +265,9 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
               driverName={name}
               subsidiaries={subs ?? []}
             />
+            {profile.role === "admin" && (
+              <DriverAccessButton profileId={driver.profile_id} driverName={name} active={driver.is_active} />
+            )}
             {profile.role === "admin" && (
               <DeleteEntityButton
                 entity="driver"
