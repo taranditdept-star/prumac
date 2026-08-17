@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
 import { faultCreateSchema, faultStatusSchema } from "@/lib/validation/fault";
+import { announceFaultsToTeam } from "@/lib/chat/announce";
 
 export type ActionResult<T = void> =
   | { error: string }
@@ -88,6 +89,11 @@ export async function reportFault(formData: FormData): Promise<ActionResult<{ id
       body: parsed.data.description.slice(0, 200),
     });
   }
+
+  // Announce the new fault to the team group (Chitsano) — every fault.
+  await announceFaultsToTeam([
+    { id: data.id, title: parsed.data.title, severity: parsed.data.severity },
+  ]);
 
   revalidatePath("/faults");
   revalidatePath("/home");

@@ -95,6 +95,15 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
     return msg(await READ_TOOLS.list_accidents.run({ status }));
   }
 
+  if (/\b(faults?|defects?|breakdowns?|broke\s?down|snags?|what.?s? broken)\b/.test(t)) {
+    const status = /\b(fixed|resolved|repaired|sorted|done)\b/.test(t) ? "resolved" : undefined;
+    const plate = text.match(/\b([a-z]{2,3}\s?\d{3,4})\b/i);
+    const params: Record<string, string> = {};
+    if (status) params.status = status;
+    if (plate) params.vehicle = plate[1].trim();
+    return msg(await READ_TOOLS.list_faults.run(params));
+  }
+
   if (/\b(attendance|checked ?in|check ?in|clock(ed)? in|present today|here today|absent|at work|came? in|come in|who.?s? in today|who is in today)\b/.test(t)) {
     return msg(await READ_TOOLS.get_attendance_today.run({}));
   }

@@ -185,6 +185,47 @@ async function runAccidents(input: Record<string, unknown>): Promise<string> {
   return `${data.length} accident(s):\n${lines.join("\n")}`;
 }
 
+async function runFaults(input: Record<string, unknown>): Promise<string> {
+  const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 40);
+  const status = str(input.status);
+  const severity = str(input.severity);
+
+  let vehicleId: string | null = null;
+  const vehRef = str(input.vehicle);
+  if (vehRef) {
+    try {
+      vehicleId = (await resolveVehicle(vehRef)).id;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Could not find that vehicle.";
+    }
+  }
+
+  let q = app()
+    .from("faults")
+    .select("reported_at, severity, status, category, title, vehicle_id, source")
+    .order("reported_at", { ascending: false })
+    .limit(limit);
+  // Default view = OPEN faults; an explicit status narrows it.
+  if (status) q = q.eq("status", status);
+  else q = q.in("status", ["reported", "acknowledged", "in_repair"]);
+  if (severity) q = q.eq("severity", severity);
+  if (vehicleId) q = q.eq("vehicle_id", vehicleId);
+
+  const { data } = await q.returns<
+    { reported_at: string; severity: string; status: string; category: string; title: string; vehicle_id: string; source: string }[]
+  >();
+  if (!data || data.length === 0) {
+    return status ? `No ${status} faults on record.` : "No open faults right now — the fleet is clear. 👍";
+  }
+  const vehicles = await activeVehicles();
+  const plateById = new Map(vehicles.map((v) => [v.id, v.plate_number]));
+  const lines = data.map((f) => {
+    const plate = plateById.get(f.vehicle_id) ?? "vehicle";
+    return `• ${plate} — ${f.severity.toUpperCase()} — ${f.title} (${f.category}) — ${f.status.replaceAll("_", " ")} — ${fmtDate(f.reported_at)}${f.source === "checklist" ? " — from checklist" : ""}`;
+  });
+  return `${data.length} fault(s):\n${lines.join("\n")}`;
+}
+
 async function runTrips(input: Record<string, unknown>): Promise<string> {
   const limit = Math.min(Math.max(Number(input.limit) || 15, 1), 40);
   let vehicleId: string | null = null;
@@ -271,6 +312,7 @@ export const READ_TOOLS: Record<string, ReadTool> = {
   list_vehicles: { description: "Fleet vehicles, status, driver, pool.", run: runVehicles },
   list_drivers: { description: "Drivers and their assigned vehicle.", run: runDrivers },
   list_accidents: { description: "Recent accidents/incidents.", run: runAccidents },
+  list_faults: { description: "Open vehicle faults / breakdowns.", run: runFaults },
   list_recent_trips: { description: "Recent trips and mileage.", run: runTrips },
   get_attendance_today: { description: "Today's attendance.", run: runAttendance },
   get_login_activity: { description: "Who is / isn't logging in.", run: runLoginActivity },
@@ -333,6 +375,7 @@ export const CAPABILITIES = `I'm Chitsano, your built-in fleet assistant. I can 
 • Vehicles — "show me the fleet", "which cars are available", "pool vehicles"
 • Drivers — "list drivers", "which drivers have no vehicle"
 • Accidents — "any recent accidents", "open accidents"
+• Faults — "what faults are open", "any breakdowns", "faults on AFQ 3770"
 • Trips & mileage — "recent trips", "trips for AFQ 3770"
 • Attendance — "who's checked in today"
 • Logins — "who isn't logging in"

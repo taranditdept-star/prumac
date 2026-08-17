@@ -26,9 +26,10 @@ export async function GET(request: Request) {
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Harare" });
 
-  const [login, openAcc, activeTrips, marks, people] = await Promise.all([
+  const [login, openAcc, openFlt, activeTrips, marks, people] = await Promise.all([
     getLoginActivity(),
     app.from("accidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
+    app.from("faults").select("id", { count: "exact", head: true }).in("status", ["reported", "acknowledged", "in_repair"]),
     app.from("trips").select("id", { count: "exact", head: true }).in("status", ["in_progress", "paused"]),
     app.from("attendance").select("profile_id").eq("attendance_date", today).returns<{ profile_id: string }[]>(),
     app.from("profiles").select("id").eq("is_active", true).neq("role", "subsidiary_billing").returns<{ id: string }[]>(),
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
 
   const notLoggedIn = login.summary.never + login.summary.dormant;
   const openAccidents = openAcc.count ?? 0;
+  const openFaults = openFlt.count ?? 0;
   const onTrips = activeTrips.count ?? 0;
   const staffIds = new Set((people.data ?? []).map((p) => p.id));
   const staff = staffIds.size;
@@ -54,7 +56,8 @@ export async function GET(request: Request) {
     `• 🔑 ${notLoggedIn} ${notLoggedIn === 1 ? "person hasn't" : "people haven't"} been signing in${nudge.length ? ` — please log in: ${nudge.join(", ")}` : ""}`,
     `• 🅿️ Attendance: ${markedToday}/${staff} checked in${notCheckedIn ? ` — ${notCheckedIn} still to mark` : " — everyone's in 🎉"}`,
     `• 🚗 ${onTrips} ${onTrips === 1 ? "vehicle is" : "vehicles are"} out on a trip`,
-    `• ⚠️ ${openAccidents} open ${openAccidents === 1 ? "fault/accident" : "faults/accidents"}${openAccidents ? " — please follow up" : ""}`,
+    `• 🛠️ ${openFaults} open ${openFaults === 1 ? "fault" : "faults"}${openFaults ? " — check the Faults board" : " 👍"}`,
+    `• ⚠️ ${openAccidents} open ${openAccidents === 1 ? "accident" : "accidents"}${openAccidents ? " — please follow up" : ""}`,
     "",
     "Drive safe. Tag @Chitsano anytime to ask me something. 🫡",
   ].join("\n");
@@ -75,5 +78,5 @@ export async function GET(request: Request) {
     kind: "chat",
   });
 
-  return NextResponse.json({ ok: true, posted: true, notLoggedIn, openAccidents, onTrips, notCheckedIn });
+  return NextResponse.json({ ok: true, posted: true, notLoggedIn, openFaults, openAccidents, onTrips, notCheckedIn });
 }
