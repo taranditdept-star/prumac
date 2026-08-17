@@ -422,6 +422,43 @@ export async function updateTrip(formData: FormData): Promise<ActionResult> {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// SUSPEND / UNSUSPEND — a manager lock. Unlike the driver's own pause/resume,
+// a suspended trip can only be lifted by a manager/admin (the driver UI never
+// offers "unsuspend"), so it holds a trip while an issue is investigated.
+// ───────────────────────────────────────────────────────────────────────────
+export async function suspendTrip(tripId: string): Promise<ActionResult> {
+  await requireRole("fleet_manager", "admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("app")
+    .from("trips")
+    .update({ status: "suspended", paused_at: new Date().toISOString() })
+    .eq("id", tripId)
+    .in("status", ["in_progress", "paused"]);
+  if (error) return { error: error.message };
+  revalidatePath(`/trips/${tripId}`);
+  revalidatePath("/trips");
+  revalidatePath("/live");
+  return { success: true };
+}
+
+export async function unsuspendTrip(tripId: string): Promise<ActionResult> {
+  await requireRole("fleet_manager", "admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("app")
+    .from("trips")
+    .update({ status: "in_progress", paused_at: null })
+    .eq("id", tripId)
+    .eq("status", "suspended");
+  if (error) return { error: error.message };
+  revalidatePath(`/trips/${tripId}`);
+  revalidatePath("/trips");
+  revalidatePath("/live");
+  return { success: true };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // CANCEL
 // ───────────────────────────────────────────────────────────────────────────
 export async function cancelTrip(formData: FormData): Promise<ActionResult> {

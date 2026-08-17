@@ -16,6 +16,7 @@ export type TripStatus =
   | "planned"
   | "in_progress"
   | "paused"
+  | "suspended"
   | "ended"
   | "completed"
   | "cancelled";

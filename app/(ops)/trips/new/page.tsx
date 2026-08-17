@@ -59,7 +59,7 @@ export default async function NewTripPage() {
       .schema("app")
       .from("trips")
       .select("id, vehicle_id, driver_id")
-      .in("status", ["in_progress", "paused", "ended"])
+      .in("status", ["in_progress", "paused", "ended", "suspended"])
       .returns<{ id: string; vehicle_id: string; driver_id: string }[]>(),
   ]);
 

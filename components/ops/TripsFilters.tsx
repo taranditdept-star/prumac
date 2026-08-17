@@ -102,6 +102,7 @@ export function TripsFilters({ vehicles, months }: Props) {
           <option value="all">All statuses</option>
           <option value="in_progress">In progress</option>
           <option value="paused">Paused</option>
+          <option value="suspended">Suspended</option>
           <option value="ended">Awaiting completion</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>

@@ -4,12 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Pause, Play, Square, CheckCircle2, XCircle, AlertCircle,
+  Pause, Play, Square, CheckCircle2, XCircle, AlertCircle, Lock, Unlock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { pauseTrip, resumeTrip, endTrip, completeTrip, cancelTrip } from "@/actions/trips";
+import { pauseTrip, resumeTrip, endTrip, completeTrip, cancelTrip, suspendTrip, unsuspendTrip } from "@/actions/trips";
 import type { TripStatus } from "@/types/domain";
 
 interface TripActionsProps {
@@ -66,6 +66,20 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
     );
   }
 
+  // A driver cannot lift a manager's suspension.
+  if (status === "suspended" && !isManager) {
+    return (
+      <div className="rounded-2xl bg-rose-50 border border-rose-200 p-6">
+        <div className="flex items-start gap-2">
+          <Lock className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+          <p className="text-sm text-rose-700">
+            This trip has been suspended by a manager. Contact your fleet manager to resume it.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl bg-white border border-ink-200/70 p-6 space-y-3">
       <h2 className="text-base font-bold text-ink-900 mb-2">Actions</h2>
@@ -89,6 +103,16 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
           >
             <Square className="h-4 w-4" /> End trip
           </button>
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => call(() => suspendTrip(tripId))}
+              disabled={isPending}
+              className="w-full h-10 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            >
+              <Lock className="h-4 w-4" /> Suspend trip
+            </button>
+          )}
         </div>
       )}
 
@@ -110,6 +134,34 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
             className="w-full h-11 rounded-xl bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
           >
             <Square className="h-4 w-4" /> End trip
+          </button>
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => call(() => suspendTrip(tripId))}
+              disabled={isPending}
+              className="w-full h-10 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            >
+              <Lock className="h-4 w-4" /> Suspend trip
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Suspended: manager can lift the lock */}
+      {status === "suspended" && isManager && (
+        <div className="space-y-2">
+          <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 flex items-start gap-2">
+            <Lock className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-rose-700">This trip is suspended — the driver cannot resume it.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => call(() => unsuspendTrip(tripId))}
+            disabled={isPending}
+            className="w-full h-11 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 shadow-sm shadow-sky-500/30 transition-all disabled:opacity-50"
+          >
+            <Unlock className="h-4 w-4" /> Lift suspension
           </button>
         </div>
       )}
