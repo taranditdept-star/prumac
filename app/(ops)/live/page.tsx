@@ -367,8 +367,12 @@ export default async function LiveOpsPage() {
           <div className="mx-6 mb-4 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
             <div className="min-w-0">
+              {/* One template string: as separate JSX children the space before
+                  "location" was being trimmed, rendering "drivers havelocation". */}
               <p className="text-sm font-bold text-rose-800">
-                {(locationOffDrivers ?? []).length} driver{(locationOffDrivers ?? []).length !== 1 ? "s have" : " has"} location OFF — can&apos;t be tracked
+                {`${(locationOffDrivers ?? []).length} ${
+                  (locationOffDrivers ?? []).length === 1 ? "driver has" : "drivers have"
+                } location OFF — can’t be tracked`}
               </p>
               <p className="mt-0.5 text-xs text-rose-700 break-words">
                 {(locationOffDrivers ?? []).map((d) => d.full_name ?? "Unknown").join(", ")}
@@ -399,7 +403,7 @@ export default async function LiveOpsPage() {
               <Link
                 key={f.id}
                 href={`/faults/${f.id}`}
-                className="flex items-center gap-3 px-6 py-3 hover:bg-ink-50/50 transition-colors group"
+                className="flex items-start gap-3 px-4 py-3 sm:items-center sm:px-6 hover:bg-ink-50/50 transition-colors group"
               >
                 {f.vehicles ? (
                   <PlateBadge plate={f.vehicles.plate_number} country={f.vehicles.plate_country as VehicleRow["plate_country"]} size="sm" />
@@ -407,7 +411,9 @@ export default async function LiveOpsPage() {
                   <span className="text-xs text-ink-400">—</span>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink-900 truncate">{f.title}</p>
+                  {/* Wraps on phones, truncates once there is a column to spare —
+                      "Reflective v…" tells a manager nothing. */}
+                  <p className="text-sm font-semibold text-ink-900 leading-snug sm:truncate">{f.title}</p>
                   <p className="text-xs text-ink-500 mt-0.5 capitalize">
                     {f.category}
                     {f.source === "checklist" && <span className="ml-1.5 text-amber-600">· from checklist</span>}
