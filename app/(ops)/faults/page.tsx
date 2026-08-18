@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { FaultSeverityBadge, FaultStatusBadge } from "@/components/primitives/SeverityBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -94,7 +95,42 @@ export default async function FaultsPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read a fault title. */}
+          <CardList>
+            {list.map((f) => (
+              <RecordCard
+                key={f.id}
+                href={`/faults/${f.id}`}
+                title={f.title}
+                subtitle={
+                  f.vehicles ? `${f.vehicles.make} ${f.vehicles.model}` : undefined
+                }
+                lead={
+                  f.vehicles ? (
+                    <PlateBadge
+                      plate={f.vehicles.plate_number}
+                      country={f.vehicles.plate_country}
+                      size="sm"
+                    />
+                  ) : undefined
+                }
+                badges={
+                  <>
+                    <FaultSeverityBadge severity={f.severity} />
+                    <FaultStatusBadge status={f.status} />
+                  </>
+                }
+                meta={[
+                  { label: "Category", value: <span className="capitalize">{f.category}</span> },
+                  { label: "Reported by", value: f.drivers?.profiles?.full_name ?? "—" },
+                  { label: "Age", value: timeAgo(f.reported_at) },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

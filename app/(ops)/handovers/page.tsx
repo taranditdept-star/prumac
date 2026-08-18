@@ -3,6 +3,7 @@ import { ArrowLeftRight, ArrowUpRight, Clock, CheckCircle2, XCircle } from "luci
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -91,7 +92,37 @@ export default async function HandoversPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read who handed a vehicle to whom. */}
+          <CardList>
+            {list.map((r) => (
+              <RecordCard
+                key={r.id}
+                href={`/handovers/${r.id}`}
+                title={`${r.from_driver?.profiles?.full_name ?? "—"} → ${r.to_driver?.profiles?.full_name ?? "—"}`}
+                subtitle={r.vehicles ? `${r.vehicles.make} ${r.vehicles.model}` : undefined}
+                lead={
+                  r.vehicles ? (
+                    <PlateBadge
+                      plate={r.vehicles.plate_number}
+                      country={r.vehicles.plate_country}
+                      size="sm"
+                    />
+                  ) : undefined
+                }
+                badges={<StatusPill status={r.status} />}
+                meta={[
+                  {
+                    label: "Odometer",
+                    value: r.odometer_km != null ? `${r.odometer_km.toLocaleString()} km` : "—",
+                  },
+                  { label: "When", value: fmt(r.created_at) },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

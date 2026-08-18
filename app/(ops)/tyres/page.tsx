@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TyreEventButton } from "@/components/ops/TyreEventButton";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode, TyreRow, TyreStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +90,46 @@ export default async function TyresPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 760px and would force sideways
+              dragging just to read a tyre's tread or reach its Event button. */}
+          <CardList>
+            {list.map((t) => {
+              const tread = t.tread_depth_mm != null ? Number(t.tread_depth_mm) : null;
+              const low = tread != null && tread <= LOW_TREAD_MM && t.status !== "scrapped";
+              const label = [t.brand, t.size, t.serial_number].filter(Boolean).join(" · ") || "Tyre";
+              return (
+                <RecordCard
+                  key={t.id}
+                  title={t.brand ?? "Tyre"}
+                  subtitle={[t.size, t.serial_number].filter(Boolean).join(" · ") || undefined}
+                  lead={
+                    t.vehicles ? (
+                      <PlateBadge plate={t.vehicles.plate_number} country={t.vehicles.plate_country} size="sm" />
+                    ) : undefined
+                  }
+                  badges={
+                    <span className={`inline-flex items-center rounded-lg border px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[t.status]}`}>
+                      {t.status.replace("_", " ")}
+                    </span>
+                  }
+                  meta={[
+                    { label: "Position", value: <span className="font-plate">{t.position ?? "—"}</span> },
+                    {
+                      label: "Tread",
+                      value: (
+                        <span className={`font-plate font-bold ${low ? "text-rose-600" : "text-ink-900"}`}>
+                          {tread != null ? `${tread.toFixed(1)} mm` : "—"}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  action={<TyreEventButton tyre={{ id: t.id, label, vehicle_id: t.vehicle_id }} />}
+                />
+              );
+            })}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

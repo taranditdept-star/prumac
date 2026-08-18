@@ -1,6 +1,7 @@
 import { History, Filter, Plus, Pencil, Trash2 } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { AuditEntry } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -141,7 +142,29 @@ export default async function AuditPage({
 
                 <div className="border-t border-ink-100 px-5 py-4 bg-ink-50/30">
                   {e.operation === "UPDATE" && cols.length > 0 ? (
-                    <div className="overflow-x-auto">
+                    <>
+                    {/* Phones get cards; the diff table needs 640px and would
+                        force sideways dragging inside an already-narrow panel. */}
+                    <CardList>
+                      {cols.map((col) => (
+                        <RecordCard
+                          key={col}
+                          title={<span className="font-plate">{col}</span>}
+                          meta={[
+                            {
+                              label: "Before",
+                              value: <span className="font-plate text-rose-600">{fmtVal(e.before_row?.[col])}</span>,
+                            },
+                            {
+                              label: "After",
+                              value: <span className="font-plate text-emerald-700">{fmtVal(e.after_row?.[col])}</span>,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </CardList>
+
+                    <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-xs min-w-[640px]">
                       <thead>
                         <tr className="text-[10px] uppercase tracking-[0.12em] text-ink-400 font-bold">
@@ -161,6 +184,7 @@ export default async function AuditPage({
                       </tbody>
                     </table>
                     </div>
+                    </>
                   ) : (
                     <pre className="text-[11px] text-ink-600 whitespace-pre-wrap break-all font-plate">
                       {JSON.stringify(e.after_row ?? e.before_row ?? {}, null, 2).slice(0, 1500)}

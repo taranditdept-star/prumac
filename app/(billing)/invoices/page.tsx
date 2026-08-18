@@ -3,6 +3,7 @@ import { Plus, Receipt, ArrowUpRight, DollarSign, FileText, Clock, AlertOctagon 
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { InvoiceStatusBadge } from "@/components/primitives/InvoiceStatusBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +131,46 @@ export default async function InvoicesPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 760px, which on a phone means
+              dragging sideways just to see what an invoice is worth. */}
+          <CardList>
+            {list.map((inv) => (
+              <RecordCard
+                key={inv.id}
+                href={`/invoices/${inv.id}`}
+                title={<span className="font-plate">{inv.invoice_number}</span>}
+                subtitle={inv.subsidiaries?.name ?? undefined}
+                badges={<InvoiceStatusBadge status={inv.status} />}
+                meta={[
+                  { label: "Period", value: fmtPeriod(inv.period_start, inv.period_end) },
+                  {
+                    label: "Issued",
+                    value: inv.issued_at
+                      ? new Date(inv.issued_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                      : "—",
+                  },
+                  {
+                    label: "Total",
+                    value: (
+                      <span className="font-plate font-bold text-ink-900">
+                        {fmtMoney(inv.total_due, inv.currency)}
+                      </span>
+                    ),
+                  },
+                  {
+                    label: "Outstanding",
+                    value: (
+                      <span className={`font-plate font-bold ${Number(inv.balance_outstanding) > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                        {fmtMoney(inv.balance_outstanding, inv.currency)}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

@@ -502,10 +502,12 @@ export default async function LiveOpsPage() {
                 <Link
                   key={v.id}
                   href={`/vehicles/${v.id}`}
-                  className="flex items-center gap-4 px-6 py-3.5 hover:bg-ink-50/50 transition-colors group"
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-6 sm:flex-nowrap hover:bg-ink-50/50 transition-colors group"
                 >
                   <PlateBadge plate={v.plate_number} country={v.plate_country} />
-                  <div className="flex-1 min-w-0">
+                  {/* basis-full below sm: the badges drop to their own line
+                      instead of colliding with the branch/odometer text. */}
+                  <div className="min-w-0 flex-1 basis-[45%] sm:basis-auto">
                     <p className="text-sm font-semibold text-ink-900 truncate">
                       {v.make} {v.model}
                     </p>
@@ -513,9 +515,11 @@ export default async function LiveOpsPage() {
                       {v.home_branch ?? "—"} · {v.current_odometer_km.toLocaleString()} km
                     </p>
                   </div>
-                  <VehicleStatusBadge status={v.status} />
-                  {earliest && <ExpiryBadge expiresAt={earliest} />}
-                  <ArrowUpRight className="h-4 w-4 text-ink-300 group-hover:text-orange-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <VehicleStatusBadge status={v.status} />
+                    {earliest && <ExpiryBadge expiresAt={earliest} />}
+                  </div>
+                  <ArrowUpRight className="hidden sm:block h-4 w-4 text-ink-300 group-hover:text-orange-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
                 </Link>
               ))}
             </div>
@@ -624,16 +628,17 @@ function IssueTile({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+      className={`flex flex-col items-start gap-2 rounded-xl border p-3 transition-colors sm:flex-row sm:items-center sm:gap-3 ${
         active ? activeCls : "border-ink-200/70 bg-white hover:bg-ink-50/50"
       }`}
     >
-      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${active ? "bg-white" : "bg-ink-100"} ${active ? iconCls : "text-ink-400"}`}>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white" : "bg-ink-100"} ${active ? iconCls : "text-ink-400"}`}>
         {icon}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <p className="text-xl font-bold text-ink-900 tabular leading-none">{value}</p>
-        <p className="text-[11px] text-ink-500 mt-1 truncate">{label}</p>
+        {/* No truncate: at three-across on a phone these read "Ope…", "Faile…". */}
+        <p className="text-[11px] text-ink-500 mt-1 leading-tight">{label}</p>
       </div>
     </Link>
   );

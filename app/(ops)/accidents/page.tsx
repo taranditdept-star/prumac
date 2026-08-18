@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { AccidentSeverityBadge, AccidentStatusBadge } from "@/components/primitives/SeverityBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -92,7 +93,46 @@ export default async function AccidentsPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read a location. */}
+          <CardList>
+            {list.map((a) => (
+              <RecordCard
+                key={a.id}
+                href={`/accidents/${a.id}`}
+                title={a.location_description}
+                subtitle={
+                  a.vehicles ? `${a.vehicles.make} ${a.vehicles.model}` : undefined
+                }
+                lead={
+                  a.vehicles ? (
+                    <PlateBadge
+                      plate={a.vehicles.plate_number}
+                      country={a.vehicles.plate_country}
+                      size="sm"
+                    />
+                  ) : undefined
+                }
+                badges={
+                  <>
+                    <AccidentSeverityBadge severity={a.severity} />
+                    <AccidentStatusBadge status={a.status} />
+                    {a.injuries && (
+                      <span className="inline-flex items-center rounded-md bg-rose-100 text-rose-800 px-1.5 py-0.5 text-[10px] font-bold">
+                        INJURIES
+                      </span>
+                    )}
+                  </>
+                }
+                meta={[
+                  { label: "Driver", value: a.drivers?.profiles?.full_name ?? "—" },
+                  { label: "When", value: fmtDate(a.occurred_at) },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

@@ -6,6 +6,7 @@ import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
 import { TripsFilters } from "@/components/ops/TripsFilters";
 import { TripRowActions } from "@/components/ops/TripRowActions";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -230,7 +231,59 @@ export default async function TripsPage({
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read a route or reach the row menu. */}
+          <CardList>
+            {list.map((t) => {
+              const distance =
+                t.start_odometer_km != null && t.end_odometer_km != null
+                  ? t.end_odometer_km - t.start_odometer_km
+                  : null;
+              return (
+                <RecordCard
+                  key={t.id}
+                  href={`/trips/${t.id}`}
+                  lead={
+                    t.vehicles ? (
+                      <PlateBadge plate={t.vehicles.plate_number} country={t.vehicles.plate_country} size="sm" />
+                    ) : undefined
+                  }
+                  title={
+                    t.route_description ||
+                    (t.origin_label && t.destination_label ? `${t.origin_label} → ${t.destination_label}` : "—")
+                  }
+                  subtitle={t.vehicles ? `${t.vehicles.make} ${t.vehicles.model}` : undefined}
+                  badges={<TripStatusBadge status={t.status} />}
+                  meta={[
+                    { label: "Driver", value: t.drivers?.profiles?.full_name ?? "Unknown" },
+                    { label: "Distance", value: distance != null ? `${distance.toLocaleString()} km` : "—" },
+                    { label: "Started", value: fmtStarted(t.started_at) },
+                    // Only worth a slot when the trip is actually attributed.
+                    ...(t.subsidiaries?.name ? [{ label: "Company", value: t.subsidiaries.name }] : []),
+                  ]}
+                  action={
+                    <TripRowActions
+                      tripId={t.id}
+                      status={t.status}
+                      isManager={isManager}
+                      label={t.vehicles?.plate_number ?? "trip"}
+                      purpose={t.purpose}
+                      routeDescription={t.route_description}
+                      originLabel={t.origin_label}
+                      destinationLabel={t.destination_label}
+                      startOdometer={t.start_odometer_km}
+                      endOdometer={t.end_odometer_km}
+                      fuelLitres={t.fuel_litres}
+                      fuelAmount={t.fuel_amount}
+                      loadCount={t.load_count}
+                    />
+                  }
+                />
+              );
+            })}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

@@ -3,6 +3,7 @@ import { Plus, Package, AlertTriangle, Boxes, DollarSign } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PartMovementButton } from "@/components/ops/PartMovementButton";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode, PartRow } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +78,46 @@ export default async function PartsPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read a part name or reach the Stock button. */}
+          <CardList>
+            {list.map((p) => {
+              const isLow = Number(p.current_stock) <= Number(p.reorder_level);
+              return (
+                <RecordCard
+                  key={p.id}
+                  title={p.name}
+                  subtitle={p.sku ? <span className="font-plate">{p.sku}</span> : undefined}
+                  meta={[
+                    { label: "Category", value: <span className="capitalize">{p.category.replace("_", " ")}</span> },
+                    {
+                      label: "In stock",
+                      value: (
+                        <span
+                          className={`inline-flex items-center gap-1.5 font-plate font-bold ${
+                            isLow ? "text-rose-600" : "text-ink-900"
+                          }`}
+                        >
+                          {isLow && <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />}
+                          {Number(p.current_stock).toLocaleString()} {p.unit}
+                        </span>
+                      ),
+                    },
+                    { label: "Unit cost", value: money(p.unit_cost, p.currency) },
+                    { label: "Supplier", value: p.supplier ?? "—" },
+                  ]}
+                  action={
+                    <PartMovementButton
+                      part={{ id: p.id, name: p.name, unit: p.unit, current_stock: Number(p.current_stock) }}
+                      vehicles={vehicles ?? []}
+                    />
+                  }
+                />
+              );
+            })}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

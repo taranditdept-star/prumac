@@ -3,6 +3,7 @@ import { Plus, Fuel, Droplets, Gauge, DollarSign } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -106,7 +107,55 @@ export default async function FuelPage() {
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read what a fill cost. */}
+          <CardList>
+            {list.map((r) => (
+              <RecordCard
+                key={r.id}
+                title={<span className="font-plate">{money(r.total_cost, r.currency)}</span>}
+                subtitle={
+                  r.vehicles
+                    ? `${fmtDate(r.filled_at)} · ${r.vehicles.make} ${r.vehicles.model}`
+                    : fmtDate(r.filled_at)
+                }
+                lead={
+                  r.vehicles ? (
+                    <PlateBadge
+                      plate={r.vehicles.plate_number}
+                      country={r.vehicles.plate_country}
+                      size="sm"
+                    />
+                  ) : undefined
+                }
+                meta={[
+                  {
+                    label: "Litres",
+                    value: <span className="font-plate">{Number(r.litres).toFixed(1)} L</span>,
+                  },
+                  {
+                    label: "Price / L",
+                    value: (
+                      <span className="font-plate">
+                        {r.price_per_litre != null ? `$${Number(r.price_per_litre).toFixed(2)}` : "—"}
+                      </span>
+                    ),
+                  },
+                  {
+                    label: "Odometer",
+                    value: (
+                      <span className="font-plate">
+                        {r.odometer_km != null ? `${r.odometer_km.toLocaleString()} km` : "—"}
+                      </span>
+                    ),
+                  },
+                  { label: "Station", value: r.station ?? "—" },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

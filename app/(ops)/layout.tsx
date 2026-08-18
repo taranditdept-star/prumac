@@ -22,7 +22,9 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
         </SidebarDrawer>
         <div className="flex-1 flex flex-col min-w-0">
           <OpsTopBar profile={profile} alertCount={count} />
-          <main className="flex-1">{children}</main>
+          {/* pb-24 keeps the last row clear of the floating chat bubble, which
+              sits bottom-right and was covering content on phones. */}
+          <main className="flex-1 pb-24 md:pb-0">{children}</main>
         </div>
         <ManagerAlerting />
         <ChatWidget currentProfileId={profile.id} currentName={profile.full_name ?? "You"} />

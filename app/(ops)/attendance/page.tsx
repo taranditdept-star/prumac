@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getLoginActivity } from "@/lib/ops/login-activity";
 import { LoginActivityPanel } from "@/components/ops/LoginActivityPanel";
 import { AttendanceBoard, type AttendancePerson } from "@/components/ops/AttendanceBoard";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { AppRole } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -166,7 +167,45 @@ export default async function AttendancePage({
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-ink-200/70 bg-white">
-            <div className="overflow-x-auto">
+            {/* Phones get cards; the table needs 640px, which pushes duration
+                and status off-screen. */}
+            <CardList>
+              {recentSessions.map((s) => {
+                const end = s.logout_at ?? s.last_seen_at;
+                const stillOn = !s.logout_at && Date.now() - new Date(s.last_seen_at).getTime() < 180_000;
+                return (
+                  <RecordCard
+                    key={s.id}
+                    title={s.profiles?.full_name ?? "Unknown"}
+                    subtitle={s.profiles ? roleLabel(s.profiles.role) : undefined}
+                    badges={
+                      stillOn ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Online
+                        </span>
+                      ) : s.logout_at ? (
+                        <span className="text-xs font-semibold text-ink-400">Signed out</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-amber-600">Left (tab closed)</span>
+                      )
+                    }
+                    meta={[
+                      { label: "Logged in", value: fmtDateTime(s.login_at) },
+                      {
+                        label: "Logged out",
+                        value: s.logout_at ? fmtDateTime(s.logout_at) : `${fmtDateTime(s.last_seen_at)} (approx)`,
+                      },
+                      {
+                        label: "Duration",
+                        value: <span className="font-plate">{fmtDuration(s.login_at, end)}</span>,
+                      },
+                    ]}
+                  />
+                );
+              })}
+            </CardList>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-ink-100 bg-ink-50/50 text-left text-[11px] uppercase tracking-wider text-ink-400">

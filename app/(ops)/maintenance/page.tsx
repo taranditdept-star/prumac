@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { MaintenanceFilters } from "@/components/ops/MaintenanceFilters";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -155,7 +156,45 @@ export default async function MaintenancePage({
         </div>
       ) : (
         <div className="rounded-2xl bg-white border border-ink-200/70 overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="overflow-x-auto">
+          {/* Phones get cards; the table needs 900px and would force sideways
+              dragging just to read what was done to which vehicle. */}
+          <CardList>
+            {list.map((r) => (
+              <RecordCard
+                key={r.id}
+                title={r.summary ?? (r.is_routine_service ? "Routine service" : "Repair")}
+                subtitle={r.vehicles ? `${r.vehicles.make} ${r.vehicles.model}` : undefined}
+                lead={
+                  r.vehicles ? (
+                    <PlateBadge plate={r.vehicles.plate_number} country={r.vehicles.plate_country} size="sm" />
+                  ) : undefined
+                }
+                badges={
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-medium ${
+                      r.is_routine_service
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${r.is_routine_service ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    {r.is_routine_service ? "Service" : "Repair"}
+                  </span>
+                }
+                meta={[
+                  { label: "Performed", value: fmtDate(r.performed_at) },
+                  {
+                    label: "Amount",
+                    value: <span className="font-plate font-bold text-ink-900">{money(r.total_amount, r.currency)}</span>,
+                  },
+                  { label: "Odometer", value: r.odometer_km != null ? `${r.odometer_km.toLocaleString()} km` : "—" },
+                  { label: "Workshop", value: r.workshop ?? "—" },
+                ]}
+              />
+            ))}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">

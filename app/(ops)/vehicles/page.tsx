@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { VehicleStatusBadge } from "@/components/primitives/VehicleStatusBadge";
+import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import { VehicleRowActions } from "@/components/ops/VehicleRowActions";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
 import type { VehicleRow, DocumentRow } from "@/types/domain";
@@ -167,7 +168,73 @@ export default async function VehiclesPage({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones get cards; the table needs 760px and would force sideways
+              dragging just to read a make and model or reach the row menu. */}
+          <CardList>
+            {shown.map((v) => {
+              const vehicleDocs = docsByVehicle.get(v.id) ?? [];
+              const expiredDocs = vehicleDocs.filter(
+                (d) => getExpiryUrgency(d.expires_at) === "expired",
+              );
+              const soonDocs = vehicleDocs.filter((d) => {
+                const u = getExpiryUrgency(d.expires_at);
+                return u === "critical" || u === "warning";
+              });
+
+              return (
+                <RecordCard
+                  key={v.id}
+                  href={`/vehicles/${v.id}`}
+                  lead={<PlateBadge plate={v.plate_number} country={v.plate_country} size="sm" />}
+                  title={`${v.make} ${v.model}`}
+                  subtitle={<span className="capitalize">{v.variant ?? v.class.replace("_", " ")}</span>}
+                  badges={
+                    <>
+                      <VehicleStatusBadge status={v.status} />
+                      {v.is_pool && (
+                        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                          Pool
+                        </span>
+                      )}
+                      {expiredDocs.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
+                          {expiredDocs.length} expired
+                        </span>
+                      ) : soonDocs.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          {soonDocs.length} expiring
+                        </span>
+                      ) : vehicleDocs.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Compliant
+                        </span>
+                      ) : null}
+                    </>
+                  }
+                  meta={[
+                    { label: "Branch", value: v.home_branch ?? "—" },
+                    {
+                      label: "Odometer",
+                      value: (
+                        <span className="font-plate font-semibold">
+                          {v.current_odometer_km.toLocaleString()} km
+                        </span>
+                      ),
+                    },
+                  ]}
+                  action={
+                    <VehicleRowActions vehicle={v} subsidiaries={subsidiaries ?? []} isAdmin={isAdmin} />
+                  }
+                />
+              );
+            })}
+          </CardList>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50/50 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">
@@ -264,6 +331,7 @@ export default async function VehiclesPage({
             </tbody>
           </table>
           </div>
+          </>
         )}
       </div>
     </div>
