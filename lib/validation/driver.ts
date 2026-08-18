@@ -19,6 +19,7 @@ export const driverCreateSchema = z.object({
     .regex(/^[\d\s+()-]{9,15}$/, "Enter a valid phone number"),
   email: z.string().email("Enter a valid email").optional().or(z.literal("")),
   employee_number: z.string().max(40).nullable().optional(),
+  national_id: z.string().max(40).nullable().optional(),
   licence_number: z.string().min(3, "Licence number is required").max(40),
   licence_country: z.enum(["ZW", "ZA"]),
   licence_classes: z.array(z.enum(LICENCE_CLASSES)).min(1, "Pick at least one licence class"),

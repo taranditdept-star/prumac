@@ -35,6 +35,7 @@ export async function createDriver(formData: FormData): Promise<ActionResult<{ i
     phone: formData.get("phone"),
     email: formData.get("email") || undefined,
     employee_number: formData.get("employee_number") || null,
+    national_id: formData.get("national_id") || null,
     licence_number: formData.get("licence_number"),
     licence_country: formData.get("licence_country"),
     licence_classes: formData.getAll("licence_classes"),
@@ -99,6 +100,7 @@ export async function createDriver(formData: FormData): Promise<ActionResult<{ i
     .insert({
       profile_id: userId,
       employee_number: data.employee_number ?? null,
+      national_id: data.national_id ?? null,
       licence_number: data.licence_number,
       licence_country: data.licence_country,
       licence_classes: data.licence_classes,
@@ -134,6 +136,7 @@ export async function updateDriver(formData: FormData): Promise<ActionResult> {
     id: formData.get("id"),
     full_name: formData.get("full_name") ?? undefined,
     employee_number: formData.get("employee_number") || null,
+    national_id: formData.get("national_id") || null,
     licence_number: formData.get("licence_number") ?? undefined,
     licence_country: formData.get("licence_country") ?? undefined,
     licence_classes: formData.getAll("licence_classes"),

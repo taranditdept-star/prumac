@@ -115,6 +115,14 @@ export function DriverForm({ driver, onSaved }: DriverFormProps) {
             className={inputCls + " font-plate"}
           />
         </Field>
+        <Field label="National ID">
+          <input
+            name="national_id"
+            defaultValue={driver?.national_id ?? ""}
+            placeholder="28-102281-G-21"
+            className={inputCls + " font-plate"}
+          />
+        </Field>
       </Section>
 
       {/* Licence */}

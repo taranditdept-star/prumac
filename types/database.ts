@@ -82,6 +82,7 @@ export interface Database {
           id: string;
           profile_id: string;
           employee_number: string | null;
+          national_id: string | null;
           licence_number: string;
           licence_country: CountryCode;
           licence_classes: string[];

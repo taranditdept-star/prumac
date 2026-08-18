@@ -240,6 +240,12 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
                     <span className="font-plate">{driver.employee_number}</span>
                   </span>
                 )}
+                {driver.national_id && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <IdCard className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="font-plate">ID {driver.national_id}</span>
+                  </span>
+                )}
                 {subsidiary && (
                   <span className="inline-flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-slate-400" />
