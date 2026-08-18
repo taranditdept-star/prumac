@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Film, Mic, ImageIcon, X, Trash2, ExternalLink, UserCircle2 } from "lucide-react";
+import { FileText, Film, Mic, ImageIcon, X, Trash2, ExternalLink, UserCircle2, VolumeX } from "lucide-react";
 import { humanSize, type MediaKind } from "@/lib/evidence/limits";
 
 export interface GalleryItem {
@@ -140,11 +140,30 @@ export function EvidenceGallery({
             {videos.map((it) => (
               <div key={it.id} className="relative overflow-hidden rounded-2xl border border-ink-200 bg-black">
                 {it.url ? (
-                  <video controls preload="metadata" playsInline className="h-full w-full bg-black" src={it.url}>
+                  // Accident clips play silent. Bystander audio at a crash scene
+                  // is rarely evidence and often distressing or identifying, and
+                  // these reports get shared with the CEO, HR and the committee.
+                  // The audio track is still in the file — this only silences
+                  // playback. Statements belong under Audio below.
+                  <video
+                    controls
+                    muted
+                    preload="metadata"
+                    playsInline
+                    className="h-full w-full bg-black"
+                    src={it.url}
+                  >
                     Your browser can&apos;t play this video.
                   </video>
                 ) : (
                   <p className="p-6 text-sm text-white/70">This video couldn&apos;t be loaded.</p>
+                )}
+                {/* Says the silence is deliberate — otherwise a viewer assumes
+                    the clip is faulty and reports it. */}
+                {it.url && (
+                  <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/90">
+                    <VolumeX className="h-3 w-3" /> Sound off
+                  </span>
                 )}
                 <Meta it={it} onDelete={onDelete} allowOpenInNewTab={allowOpenInNewTab} dark />
               </div>
