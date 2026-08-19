@@ -1,4 +1,5 @@
-import { EXPORT_LIMIT, type ExportDataset } from "./types";
+import { type ExportDataset } from "./types";
+import { fetchAll } from "./paginate";
 import { purposeText } from "@/lib/trip-purposes";
 
 /**
@@ -25,13 +26,13 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase, params) => {
-      let q = supabase.schema("app").from("vehicles")
-        .select("*, subsidiaries(name)").order("make").limit(EXPORT_LIMIT);
       const status = params.get("status");
-      if (status && status !== "all") q = q.eq("status", status);
-      else q = q.neq("status", "decommissioned");
-      const { data, error } = await q;
-      return { rows: data ?? [], error: error?.message, subtitle: status && status !== "all" ? title(status) : undefined };
+      const make = () => {
+        const q = supabase.schema("app").from("vehicles").select("*, subsidiaries(name)").order("make");
+        return status && status !== "all" ? q.eq("status", status) : q.neq("status", "decommissioned");
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      return { rows, error, subtitle: status && status !== "all" ? title(status) : undefined };
     },
     columns: [
       { header: "Plate", value: (r) => r.plate_number, width: 12 },
@@ -57,14 +58,15 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase, params) => {
-      let q = supabase.schema("app").from("drivers")
-        .select("*, profiles!inner(full_name, phone, access_status)")
-        .limit(EXPORT_LIMIT);
-      if (params.get("active") === "1") q = q.eq("is_active", true);
-      const { data, error } = await q;
-      const rows = (data ?? []).sort((a: AnyRow, b: AnyRow) =>
-        String(a.profiles?.full_name ?? "").localeCompare(String(b.profiles?.full_name ?? "")));
-      return { rows, error: error?.message };
+      const activeOnly = params.get("active") === "1";
+      const make = () => {
+        const q = supabase.schema("app").from("drivers")
+          .select("*, profiles!inner(full_name, phone, access_status)").order("employee_number");
+        return activeOnly ? q.eq("is_active", true) : q;
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      rows.sort((a, b) => String(a.profiles?.full_name ?? "").localeCompare(String(b.profiles?.full_name ?? "")));
+      return { rows, error };
     },
     columns: [
       { header: "Driver ID", value: (r) => r.employee_number ?? "", width: 11 },
@@ -90,22 +92,25 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase, params) => {
-      let q = supabase.schema("app").from("trips")
-        .select(`started_at, ended_at, status, purpose, purpose_detail, route_description,
-                 origin_label, destination_label, start_odometer_km, end_odometer_km,
-                 fuel_litres, fuel_amount, load_count,
-                 vehicles(plate_number, make, model),
-                 drivers(employee_number, profiles(full_name)),
-                 subsidiaries(name)`)
-        .order("started_at", { ascending: false }).limit(EXPORT_LIMIT);
       const status = params.get("status");
-      if (status && status !== "all") q = q.eq("status", status);
       const from = params.get("from"), to = params.get("to");
-      if (from) q = q.gte("started_at", from);
-      if (to) q = q.lte("started_at", `${to}T23:59:59`);
-      const { data, error } = await q;
+      const make = () => {
+        let q = supabase.schema("app").from("trips")
+          .select(`started_at, ended_at, status, purpose, purpose_detail, route_description,
+                   origin_label, destination_label, start_odometer_km, end_odometer_km,
+                   fuel_litres, fuel_amount, load_count,
+                   vehicles(plate_number, make, model),
+                   drivers(employee_number, profiles(full_name)),
+                   subsidiaries(name)`)
+          .order("started_at", { ascending: false });
+        if (status && status !== "all") q = q.eq("status", status);
+        if (from) q = q.gte("started_at", from);
+        if (to) q = q.lte("started_at", `${to}T23:59:59`);
+        return q;
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
       const sub = [from && `from ${from}`, to && `to ${to}`].filter(Boolean).join(" ");
-      return { rows: data ?? [], error: error?.message, subtitle: sub || undefined };
+      return { rows, error, subtitle: sub || undefined };
     },
     columns: [
       { header: "Started", value: (r) => datetime(r.started_at), width: 16 },
@@ -138,15 +143,17 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["subsidiary_billing", "admin", "fleet_manager"],
     orientation: "landscape",
     fetch: async (supabase, params) => {
-      let q = supabase.schema("app").from("invoices")
-        .select(`invoice_number, status, period_start, period_end, issued_at, due_at,
-                 subtotal, total_due, amount_paid, balance_outstanding, currency,
-                 subsidiaries(name, code)`)
-        .order("issued_at", { ascending: false }).limit(EXPORT_LIMIT);
       const status = params.get("status");
-      if (status && status !== "all") q = q.eq("status", status);
-      const { data, error } = await q;
-      return { rows: data ?? [], error: error?.message, subtitle: status && status !== "all" ? title(status) : undefined };
+      const make = () => {
+        const q = supabase.schema("app").from("invoices")
+          .select(`invoice_number, status, period_start, period_end, issued_at, due_at,
+                   subtotal, total_due, amount_paid, balance_outstanding, currency,
+                   subsidiaries(name, code)`)
+          .order("issued_at", { ascending: false });
+        return status && status !== "all" ? q.eq("status", status) : q;
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      return { rows, error, subtitle: status && status !== "all" ? title(status) : undefined };
     },
     columns: [
       { header: "Invoice no.", value: (r) => r.invoice_number, width: 16 },
@@ -171,14 +178,16 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase, params) => {
-      let q = supabase.schema("app").from("faults")
-        .select(`reported_at, severity, status, category, title, description, odometer_km,
-                 vehicles(plate_number, make, model), drivers(profiles(full_name))`)
-        .order("reported_at", { ascending: false }).limit(EXPORT_LIMIT);
       const status = params.get("status");
-      if (status && status !== "all") q = q.eq("status", status);
-      const { data, error } = await q;
-      return { rows: data ?? [], error: error?.message };
+      const make = () => {
+        const q = supabase.schema("app").from("faults")
+          .select(`reported_at, severity, status, category, title, description, odometer_km,
+                   vehicles(plate_number, make, model), drivers(profiles(full_name))`)
+          .order("reported_at", { ascending: false });
+        return status && status !== "all" ? q.eq("status", status) : q;
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      return { rows, error };
     },
     columns: [
       { header: "Reported", value: (r) => datetime(r.reported_at), width: 16 },
@@ -199,11 +208,12 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase) => {
-      const { data, error } = await supabase.schema("app").from("inspections")
+      const { rows, error } = await fetchAll<AnyRow>(() =>
+        supabase.schema("app").from("inspections")
         .select(`completed_at, type, overall_result, odometer_km,
                  vehicles(plate_number, make, model), drivers(profiles(full_name))`)
-        .order("completed_at", { ascending: false }).limit(EXPORT_LIMIT);
-      return { rows: data ?? [], error: error?.message };
+          .order("completed_at", { ascending: false }));
+      return { rows, error };
     },
     columns: [
       { header: "Completed", value: (r) => datetime(r.completed_at), width: 16 },
@@ -222,12 +232,13 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase) => {
-      const { data, error } = await supabase.schema("app").from("fuel_logs")
+      const { rows, error } = await fetchAll<AnyRow>(() =>
+        supabase.schema("app").from("fuel_logs")
         .select(`filled_at, litres, price_per_litre, total_cost, currency, odometer_km,
                  is_full_tank, station, payment_method,
                  vehicles(plate_number, make, model), drivers(profiles(full_name))`)
-        .order("filled_at", { ascending: false }).limit(EXPORT_LIMIT);
-      return { rows: data ?? [], error: error?.message };
+          .order("filled_at", { ascending: false }));
+      return { rows, error };
     },
     columns: [
       { header: "Date", value: (r) => datetime(r.filled_at), width: 16 },
@@ -251,11 +262,12 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     roles: ["fleet_manager", "admin"],
     orientation: "landscape",
     fetch: async (supabase) => {
-      const { data, error } = await supabase.schema("app").from("accidents")
+      const { rows, error } = await fetchAll<AnyRow>(() =>
+        supabase.schema("app").from("accidents")
         .select(`occurred_at, severity, status, location_description, injuries, odometer_km,
                  vehicles(plate_number, make, model), drivers(profiles(full_name))`)
-        .order("occurred_at", { ascending: false }).limit(EXPORT_LIMIT);
-      return { rows: data ?? [], error: error?.message };
+          .order("occurred_at", { ascending: false }));
+      return { rows, error };
     },
     columns: [
       { header: "Occurred", value: (r) => datetime(r.occurred_at), width: 16 },
