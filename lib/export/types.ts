@@ -37,11 +37,15 @@ export interface ExportDataset<Row = Record<string, unknown>> {
 export const EXPORT_LIMIT = 20_000;
 
 /**
- * A PDF is laid out row by row, so a few thousand rows takes minutes and times
- * out the request. 1000 renders comfortably. Excel and CSV stay uncapped —
- * they are the right tool for bulk, and the PDF says so on the page when it
- * has been cut.
+ * A PDF is laid out row by row, and the renderer is slow: 1000 wide rows took
+ * two minutes on the server, which is far too long to leave someone waiting on
+ * a download. 500 keeps it responsive and is already ~20 pages — beyond that
+ * nobody is printing it anyway.
+ *
+ * Excel and CSV stay uncapped; they are the right tool for bulk. When the PDF
+ * is cut it says so on the page, because nobody checks a report for the rows
+ * that are not there.
  */
-export const PDF_ROW_LIMIT = 1000;
+export const PDF_ROW_LIMIT = 500;
 
 export type ExportFormat = "xlsx" | "pdf" | "csv";
