@@ -1,16 +1,15 @@
 import { z } from "zod";
+import { TRIP_PURPOSE_VALUES, PURPOSE_DETAIL_MAX } from "@/lib/trip-purposes";
 import { odometerKm, odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
-const PURPOSES = [
-  "delivery", "sales", "collection", "maintenance_run", "admin", "personal", "other",
-] as const;
 
 export const tripStartSchema = z.object({
   vehicle_id: uuid(),
   driver_id: uuid(),
   subsidiary_id: uuid(),
-  purpose: z.enum(PURPOSES).default("delivery"),
+  purpose: z.enum(TRIP_PURPOSE_VALUES).default("delivery"),
+  purpose_detail: z.string().trim().max(PURPOSE_DETAIL_MAX).nullable().optional(),
   route_description: z.string().max(500).nullable().optional(),
   origin_label: z.string().max(120).nullable().optional(),
   destination_label: z.string().max(120).nullable().optional(),
@@ -33,7 +32,8 @@ export const tripCancelSchema = z.object({
 // Manager/admin correction of an existing trip's data (not its status).
 export const tripEditSchema = z.object({
   trip_id: uuid(),
-  purpose: z.enum(PURPOSES),
+  purpose: z.enum(TRIP_PURPOSE_VALUES),
+  purpose_detail: z.string().trim().max(PURPOSE_DETAIL_MAX).nullable().optional(),
   route_description: z.string().max(500).nullable().optional(),
   origin_label: z.string().max(120).nullable().optional(),
   destination_label: z.string().max(120).nullable().optional(),
@@ -43,8 +43,6 @@ export const tripEditSchema = z.object({
   fuel_amount: z.coerce.number().min(0).max(100000).nullable().optional(),
   load_count: z.coerce.number().int().min(0).max(1000).nullable().optional(),
 });
-
-export const TRIP_PURPOSES = PURPOSES;
 
 export type TripStartInput = z.infer<typeof tripStartSchema>;
 export type TripEndInput = z.infer<typeof tripEndSchema>;

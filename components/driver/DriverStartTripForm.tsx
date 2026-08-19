@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { startTrip } from "@/actions/trips";
 import { SinglePhotoInput } from "@/components/primitives/SinglePhotoInput";
+import { TRIP_PURPOSES } from "@/lib/trip-purposes";
 
 interface DriverStartTripFormProps {
   vehicleId: string;
@@ -105,12 +106,21 @@ export function DriverStartTripForm({
           Purpose
         </Label>
         <select name="purpose" defaultValue="delivery" className={selectCls}>
-          {PURPOSES.map(([v, l]) => (
+          {TRIP_PURPOSES.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </select>
+        {/* No list covers every job. Let the driver say it in their own words —
+            the office can bill off this even when the purpose is just "Other". */}
+        <input
+          name="purpose_detail"
+          type="text"
+          maxLength={200}
+          placeholder="Anything to add? e.g. cement to Gwanda site"
+          className="mt-2 h-12 w-full rounded-xl border border-ink-200 bg-white px-3.5 text-base text-ink-900 placeholder:text-ink-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/25"
+        />
       </div>
 
       <div className="space-y-1.5">

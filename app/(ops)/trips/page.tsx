@@ -17,6 +17,7 @@ interface TripListRow {
   id: string;
   status: TripStatus;
   purpose: string;
+  purpose_detail: string | null;
   route_description: string | null;
   origin_label: string | null;
   destination_label: string | null;
@@ -112,7 +113,7 @@ export default async function TripsPage({
   // COUNT on every load).
   let listQ = applyFilters(
     supabase.schema("app").from("trips").select(`
-      id, status, purpose, route_description, origin_label, destination_label,
+      id, status, purpose, purpose_detail, route_description, origin_label, destination_label,
       start_odometer_km, end_odometer_km, fuel_litres, fuel_amount, load_count, started_at,
       vehicles(plate_number, plate_country, make, model),
       drivers(id, profiles(full_name)),
@@ -268,6 +269,7 @@ export default async function TripsPage({
                       isManager={isManager}
                       label={t.vehicles?.plate_number ?? "trip"}
                       purpose={t.purpose}
+                      purposeDetail={t.purpose_detail}
                       routeDescription={t.route_description}
                       originLabel={t.origin_label}
                       destinationLabel={t.destination_label}
@@ -350,6 +352,7 @@ export default async function TripsPage({
                           isManager={isManager}
                           label={t.vehicles?.plate_number ?? "trip"}
                           purpose={t.purpose}
+                          purposeDetail={t.purpose_detail}
                           routeDescription={t.route_description}
                           originLabel={t.origin_label}
                           destinationLabel={t.destination_label}

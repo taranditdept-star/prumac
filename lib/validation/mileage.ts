@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { TRIP_PURPOSE_VALUES, PURPOSE_DETAIL_MAX } from "@/lib/trip-purposes";
 import { odometerKm } from "./odometer";
 import { uuid } from "./uuid";
 
-const PURPOSES = ["delivery", "sales", "collection", "maintenance_run", "admin", "personal", "other"] as const;
 
 export const mileageSchema = z
   .object({
@@ -15,7 +15,8 @@ export const mileageSchema = z
     origin_label: z.string().trim().max(120).optional().nullable(),
     destination_label: z.string().trim().max(120).optional().nullable(),
     route_description: z.string().trim().max(500).optional().nullable(),
-    purpose: z.enum(PURPOSES).default("delivery"),
+    purpose: z.enum(TRIP_PURPOSE_VALUES).default("delivery"),
+  purpose_detail: z.string().trim().max(PURPOSE_DETAIL_MAX).nullable().optional(),
     start_odometer_km: odometerKm(),
     end_odometer_km: odometerKm(),
   })

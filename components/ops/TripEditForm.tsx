@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, X } from "lucide-react";
 import { updateTrip } from "@/actions/trips";
+import { TRIP_PURPOSES } from "@/lib/trip-purposes";
 
 const PURPOSES: [string, string][] = [
   ["delivery", "Delivery"],
@@ -20,6 +21,7 @@ const PURPOSES: [string, string][] = [
 interface TripEditFormProps {
   tripId: string;
   purpose: string;
+  purposeDetail?: string | null;
   routeDescription: string | null;
   originLabel: string | null;
   destinationLabel: string | null;
@@ -42,6 +44,7 @@ export function TripEditForm(props: TripEditFormProps) {
   const close = () => (embedded ? props.onClose?.() : setOpen(false));
 
   const [purpose, setPurpose] = useState(props.purpose);
+  const [purposeDetail, setPurposeDetail] = useState(props.purposeDetail ?? "");
   const [route, setRoute] = useState(props.routeDescription ?? "");
   const [origin, setOrigin] = useState(props.originLabel ?? "");
   const [destination, setDestination] = useState(props.destinationLabel ?? "");
@@ -59,6 +62,7 @@ export function TripEditForm(props: TripEditFormProps) {
     const fd = new FormData();
     fd.set("trip_id", props.tripId);
     fd.set("purpose", purpose);
+    fd.set("purpose_detail", purposeDetail);
     fd.set("route_description", route);
     fd.set("origin_label", origin);
     fd.set("destination_label", destination);
@@ -108,10 +112,18 @@ export function TripEditForm(props: TripEditFormProps) {
           onChange={(e) => setPurpose(e.target.value)}
           className="h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
         >
-          {PURPOSES.map(([v, l]) => (
+          {TRIP_PURPOSES.map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
         </select>
+        {/* Free text, so "Other" still tells the office something. */}
+        <input
+          value={purposeDetail}
+          onChange={(e) => setPurposeDetail(e.target.value)}
+          maxLength={200}
+          placeholder="Anything to add?"
+          className="mt-2 h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+        />
       </Field>
 
       <Field label="Route description">

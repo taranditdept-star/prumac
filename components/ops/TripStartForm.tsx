@@ -10,6 +10,7 @@ import { Truck, User, Building2, MapPin, Camera } from "lucide-react";
 import { startTrip } from "@/actions/trips";
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import type { CountryCode } from "@/types/domain";
+import { TRIP_PURPOSES } from "@/lib/trip-purposes";
 
 interface VehicleOpt {
   id: string;
@@ -218,12 +219,20 @@ export function TripStartForm({ vehicles, drivers, subsidiaries }: TripStartForm
             Purpose
           </Label>
           <select name="purpose" defaultValue="delivery" className={selectCls}>
-            {PURPOSES.map(([v, l]) => (
+            {TRIP_PURPOSES.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>
             ))}
           </select>
+{/* Free text so the office is not guessing what "Other" meant. */}
+          <input
+            name="purpose_detail"
+            type="text"
+            maxLength={200}
+            placeholder="Anything to add? e.g. cement to Gwanda site"
+            className="mt-2 h-11 w-full rounded-xl border border-ink-200 bg-white px-3.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/25"
+          />
         </div>
       </div>
 

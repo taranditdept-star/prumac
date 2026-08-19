@@ -34,6 +34,7 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     driver_id: formData.get("driver_id"),
     subsidiary_id: formData.get("subsidiary_id"),
     purpose: formData.get("purpose") || "delivery",
+    purpose_detail: formData.get("purpose_detail") || null,
     route_description: formData.get("route_description") || null,
     origin_label: formData.get("origin_label") || null,
     destination_label: formData.get("destination_label") || null,
@@ -118,6 +119,7 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
       driver_id: parsed.data.driver_id,
       subsidiary_id: effectiveSubsidiaryId,
       purpose: parsed.data.purpose,
+      purpose_detail: parsed.data.purpose_detail ?? null,
       route_description: parsed.data.route_description,
       origin_label: parsed.data.origin_label,
       destination_label: parsed.data.destination_label,
@@ -348,6 +350,7 @@ export async function updateTrip(formData: FormData): Promise<ActionResult> {
   const parsed = tripEditSchema.safeParse({
     trip_id: formData.get("trip_id"),
     purpose: formData.get("purpose"),
+    purpose_detail: formData.get("purpose_detail") || null,
     route_description: formData.get("route_description") || null,
     origin_label: formData.get("origin_label") || null,
     destination_label: formData.get("destination_label") || null,
@@ -386,6 +389,7 @@ export async function updateTrip(formData: FormData): Promise<ActionResult> {
     .from("trips")
     .update({
       purpose: d.purpose,
+      purpose_detail: d.purpose_detail ?? null,
       route_description: d.route_description ?? null,
       origin_label: d.origin_label ?? null,
       destination_label: d.destination_label ?? null,

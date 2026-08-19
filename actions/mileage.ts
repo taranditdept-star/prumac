@@ -24,6 +24,7 @@ export async function logMileage(formData: FormData): Promise<MileageResult> {
     destination_label: formData.get("destination_label") || null,
     route_description: formData.get("route_description") || null,
     purpose: formData.get("purpose") || "delivery",
+    purpose_detail: formData.get("purpose_detail") || null,
     start_odometer_km: formData.get("start_odometer_km"),
     end_odometer_km: formData.get("end_odometer_km"),
   });
@@ -73,6 +74,7 @@ export async function logMileage(formData: FormData): Promise<MileageResult> {
     driver_id: d.driver_id,
     subsidiary_id: subsidiaryId,
     purpose: d.purpose,
+    purpose_detail: d.purpose_detail ?? null,
     origin_label: d.origin_label ?? null,
     destination_label: d.destination_label ?? null,
     route_description: d.route_description ?? null,

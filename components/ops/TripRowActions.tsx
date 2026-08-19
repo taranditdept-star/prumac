@@ -20,6 +20,7 @@ interface TripRowActionsProps {
   isManager: boolean;
   label: string;
   purpose: string;
+  purposeDetail?: string | null;
   routeDescription: string | null;
   originLabel: string | null;
   destinationLabel: string | null;
@@ -137,6 +138,7 @@ export function TripRowActions(props: TripRowActionsProps) {
         <TripEditForm
           tripId={tripId}
           purpose={props.purpose}
+          purposeDetail={props.purposeDetail}
           routeDescription={props.routeDescription}
           originLabel={props.originLabel}
           destinationLabel={props.destinationLabel}

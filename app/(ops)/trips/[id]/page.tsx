@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { purposeText } from "@/lib/trip-purposes";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft, Gauge, Fuel, MapPin, Building2, User, Calendar,
@@ -20,6 +21,7 @@ interface TripDetail {
   id: string;
   status: TripStatus;
   purpose: string;
+  purpose_detail: string | null;
   route_description: string | null;
   origin_label: string | null;
   destination_label: string | null;
@@ -124,7 +126,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             <div className="inline-flex items-center gap-2 mb-3">
               <TripStatusBadge status={trip.status} />
               <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-bold">
-                {trip.purpose.replace("_", " ")}
+                {purposeText(trip.purpose, trip.purpose_detail)}
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">
@@ -319,6 +321,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <TripEditForm
             tripId={trip.id}
             purpose={trip.purpose}
+            purposeDetail={trip.purpose_detail}
             routeDescription={trip.route_description}
             originLabel={trip.origin_label}
             destinationLabel={trip.destination_label}

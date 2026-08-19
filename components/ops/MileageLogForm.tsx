@@ -6,6 +6,7 @@ import { Truck, Search, Gauge, User, Check, Save, ArrowRight, Users } from "luci
 import { PlateBadge } from "@/components/primitives/PlateBadge";
 import { logMileage } from "@/actions/mileage";
 import type { CountryCode } from "@/types/domain";
+import { TRIP_PURPOSES } from "@/lib/trip-purposes";
 
 export interface VehicleOpt {
   id: string;
@@ -58,6 +59,7 @@ export function MileageLogForm({ vehicles, drivers }: { vehicles: VehicleOpt[]; 
   const [destination, setDestination] = useState("");
   const [route, setRoute] = useState("");
   const [purpose, setPurpose] = useState("delivery");
+  const [purposeDetail, setPurposeDetail] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [logged, setLogged] = useState<{ plate: string; driver: string; start: number; end: number; km: number }[]>([]);
@@ -100,6 +102,7 @@ export function MileageLogForm({ vehicles, drivers }: { vehicles: VehicleOpt[]; 
     fd.set("destination_label", destination);
     fd.set("route_description", route);
     fd.set("purpose", purpose);
+    fd.set("purpose_detail", purposeDetail);
     fd.set("start_odometer_km", start);
     fd.set("end_odometer_km", end);
 
@@ -242,8 +245,16 @@ export function MileageLogForm({ vehicles, drivers }: { vehicles: VehicleOpt[]; 
             <div>
               <label className={label}>Purpose</label>
               <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className={field}>
-                {PURPOSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {TRIP_PURPOSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
+              {/* Free text, so "Other" still tells the office something. */}
+              <input
+                value={purposeDetail}
+                onChange={(e) => setPurposeDetail(e.target.value)}
+                maxLength={200}
+                placeholder="Anything to add?"
+                className={field + " mt-2"}
+              />
             </div>
             <div>
               <label className={label}>From (origin)</label>
