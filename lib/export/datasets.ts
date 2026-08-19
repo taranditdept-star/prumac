@@ -223,7 +223,9 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     orientation: "landscape",
     fetch: async (supabase) => {
       const { data, error } = await supabase.schema("app").from("fuel_logs")
-        .select(`filled_at, litres, cost, odometer_km, station, vehicles(plate_number, make, model)`)
+        .select(`filled_at, litres, price_per_litre, total_cost, currency, odometer_km,
+                 is_full_tank, station, payment_method,
+                 vehicles(plate_number, make, model), drivers(profiles(full_name))`)
         .order("filled_at", { ascending: false }).limit(EXPORT_LIMIT);
       return { rows: data ?? [], error: error?.message };
     },
@@ -231,10 +233,15 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
       { header: "Date", value: (r) => datetime(r.filled_at), width: 16 },
       { header: "Plate", value: (r) => r.vehicles?.plate_number ?? "", width: 11 },
       { header: "Vehicle", value: (r) => [r.vehicles?.make, r.vehicles?.model].filter(Boolean).join(" "), width: 16 },
+      { header: "Driver", value: (r) => r.drivers?.profiles?.full_name ?? "", width: 20 },
       { header: "Litres", value: (r) => num(r.litres), width: 10, numeric: true },
-      { header: "Cost", value: (r) => num(r.cost), width: 11, numeric: true },
+      { header: "Price/litre", value: (r) => num(r.price_per_litre), width: 11, numeric: true },
+      { header: "Total cost", value: (r) => num(r.total_cost), width: 12, numeric: true },
+      { header: "Currency", value: (r) => r.currency ?? "", width: 9 },
       { header: "Odometer km", value: (r) => num(r.odometer_km), width: 12, numeric: true },
+      { header: "Full tank", value: (r) => (r.is_full_tank ? "Yes" : "No"), width: 10 },
       { header: "Station", value: (r) => r.station ?? "", width: 18 },
+      { header: "Paid by", value: (r) => title(r.payment_method), width: 13 },
     ],
   },
 
