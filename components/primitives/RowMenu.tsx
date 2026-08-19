@@ -40,10 +40,13 @@ export function RowMenu({
   actions,
   busy = false,
   ariaLabel = "Row actions",
+  trigger,
 }: {
   actions: RowAction[];
   busy?: boolean;
   ariaLabel?: string;
+  /** Replaces the "…" button — lets a toolbar reuse this menu's positioning. */
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
@@ -139,11 +142,16 @@ export function RowMenu({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-40 ${
-          open ? "bg-orange-50 text-orange-600" : "text-ink-400 hover:bg-ink-100 hover:text-ink-800"
-        }`}
+        className={
+          trigger
+            ? "disabled:opacity-40"
+            : `inline-flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-40 ${
+                open ? "bg-orange-50 text-orange-600" : "text-ink-400 hover:bg-ink-100 hover:text-ink-800"
+              }`
+        }
       >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+        {trigger ??
+          (busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />)}
       </button>
 
       {mounted && open && pos

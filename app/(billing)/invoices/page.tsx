@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { InvoiceStatusBadge } from "@/components/primitives/InvoiceStatusBadge";
 import { CardList, RecordCard } from "@/components/primitives/RecordCard";
+import { ExportMenu } from "@/components/primitives/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,8 @@ export default async function InvoicesPage() {
               : "Monthly billing per subsidiary"}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <ExportMenu dataset="invoices" />
         {canGenerate && (
           <Link
             href="/invoices/new"
@@ -94,6 +97,7 @@ export default async function InvoicesPage() {
             Generate invoice
           </Link>
         )}
+        </div>
       </div>
 
       {/* Stats */}

@@ -8,6 +8,7 @@ import { ListSearchInput } from "@/components/ops/ListSearchInput";
 import { DriverRowActions } from "@/components/ops/DriverRowActions";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
 import type { CountryCode, DriverRow } from "@/types/domain";
+import { ExportMenu } from "@/components/primitives/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -171,13 +172,16 @@ export default async function DriversPage({
             {stats.blocked > 0 && <span className="text-ink-400"> · {stats.blocked} suspended or deactivated</span>}
           </p>
         </div>
-        <Link
-          href="/drivers/new"
+        <div className="flex items-center gap-2">
+          <ExportMenu dataset="drivers" />
+          <Link
+            href="/drivers/new"
           className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 shadow-sm transition-all"
         >
           <Plus className="h-4 w-4" />
           Add driver
         </Link>
+        </div>
       </div>
 
       {/* Quick stats */}

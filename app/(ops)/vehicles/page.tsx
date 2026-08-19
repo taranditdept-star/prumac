@@ -9,6 +9,7 @@ import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import { VehicleRowActions } from "@/components/ops/VehicleRowActions";
 import { getExpiryUrgency } from "@/lib/utils/expiry";
 import type { VehicleRow, DocumentRow } from "@/types/domain";
+import { ExportMenu } from "@/components/primitives/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -107,13 +108,16 @@ export default async function VehiclesPage({
             Manage your fleet of {counts.total} active vehicles
           </p>
         </div>
-        <Link
-          href="/vehicles/new"
+        <div className="flex items-center gap-2">
+          <ExportMenu dataset="vehicles" />
+          <Link
+            href="/vehicles/new"
           className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 shadow-sm transition-all"
         >
           <Plus className="h-4 w-4" />
           Add vehicle
         </Link>
+        </div>
       </div>
 
       {/* Quick stats with subtle gradients */}

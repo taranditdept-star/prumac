@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
+import { purposeLabel } from "@/lib/trip-purposes";
 import type { CountryCode, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -42,15 +43,6 @@ function fmtDate(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-const PURPOSE_LABELS: Record<string, string> = {
-  delivery: "Delivery",
-  sales: "Sales",
-  collection: "Collection",
-  maintenance_run: "Maintenance run",
-  admin: "Admin",
-  personal: "Personal",
-  other: "Other",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "Planned",
@@ -128,7 +120,7 @@ export async function GET(request: NextRequest) {
       Vehicle: t.vehicles ? `${t.vehicles.make} ${t.vehicles.model}` : "",
       Driver: t.drivers?.profiles?.full_name ?? "",
       Subsidiary: t.subsidiaries?.name ?? "",
-      Purpose: t.purpose ? PURPOSE_LABELS[t.purpose] ?? t.purpose : "",
+      Purpose: t.purpose ? purposeLabel(t.purpose) : "",
       From: t.origin_label ?? "",
       To: t.destination_label ?? "",
       "Reason / route": t.route_description ?? "",

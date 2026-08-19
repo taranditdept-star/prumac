@@ -8,6 +8,7 @@ import { TripsFilters } from "@/components/ops/TripsFilters";
 import { TripRowActions } from "@/components/ops/TripRowActions";
 import { CardList, RecordCard } from "@/components/primitives/RecordCard";
 import type { CountryCode, TripStatus } from "@/types/domain";
+import { ExportMenu } from "@/components/primitives/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -189,6 +190,7 @@ export default async function TripsPage({
           <p className="text-sm text-ink-500 mt-1">All vehicle trips, live and historic</p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportMenu dataset="trips" />
           <Link
             href="/trips/log"
             className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 shadow-sm transition-all"
