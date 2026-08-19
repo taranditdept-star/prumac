@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { DATASETS } from "@/lib/export/datasets";
 import { buildWorkbook, buildCsv } from "@/lib/export/workbook";
 import { TablePdf } from "@/lib/export/TablePdf";
-import type { ExportFormat } from "@/lib/export/types";
+import { PDF_ROW_LIMIT, type ExportFormat } from "@/lib/export/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,12 +45,16 @@ export async function GET(
     });
 
   if (format === "pdf") {
+    const capped = rows.length > PDF_ROW_LIMIT;
     const buf = await renderToBuffer(
       TablePdf({
         title: dataset.title,
         subtitle,
         columns: dataset.columns,
-        rows,
+        rows: capped ? rows.slice(0, PDF_ROW_LIMIT) : rows,
+        note: capped
+          ? `Showing the first ${PDF_ROW_LIMIT.toLocaleString()} of ${rows.length.toLocaleString()} rows. Export to Excel for the complete list.`
+          : undefined,
         orientation: dataset.orientation ?? "landscape",
         generatedAt: new Date().toLocaleString("en-GB", {
           day: "2-digit", month: "short", year: "numeric",

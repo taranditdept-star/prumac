@@ -36,4 +36,12 @@ export interface ExportDataset<Row = Record<string, unknown>> {
 /** Cap so a stray export cannot try to stream the whole history into memory. */
 export const EXPORT_LIMIT = 20_000;
 
+/**
+ * A PDF is laid out row by row, so a few thousand rows takes minutes and times
+ * out the request. 1000 renders comfortably. Excel and CSV stay uncapped —
+ * they are the right tool for bulk, and the PDF says so on the page when it
+ * has been cut.
+ */
+export const PDF_ROW_LIMIT = 1000;
+
 export type ExportFormat = "xlsx" | "pdf" | "csv";

@@ -34,6 +34,7 @@ export function TablePdf<Row>({
   rows,
   orientation = "landscape",
   generatedAt,
+  note,
 }: {
   title: string;
   subtitle?: string;
@@ -41,6 +42,8 @@ export function TablePdf<Row>({
   rows: Row[];
   orientation?: "portrait" | "landscape";
   generatedAt: string;
+  /** Shown under the title — used when the PDF has been capped. */
+  note?: string;
 }) {
   // Share the width in proportion to each column's declared size.
   const total = columns.reduce((a, c) => a + (c.width ?? 14), 0);
@@ -62,6 +65,8 @@ export function TablePdf<Row>({
           {title}
           {subtitle ? ` — ${subtitle}` : ""} ({rows.length})
         </Text>
+
+        {note && <Text style={{ fontSize: 8, color: "#b45309", marginBottom: 8 }}>{note}</Text>}
 
         <View style={s.th} fixed>
           {columns.map((c, i) => (
