@@ -197,6 +197,8 @@ export function TripActions({ tripId, status, startOdometer, isManager }: TripAc
             <Input
               name="end_odometer_km"
               type="number"
+              inputMode="decimal"
+              step={0.1}
               min={startOdometer ?? 0}
               defaultValue={startOdometer ?? undefined}
               required

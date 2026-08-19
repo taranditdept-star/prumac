@@ -136,7 +136,8 @@ export function HandoverChecklist(props: Props) {
         </Label>
         <Input
           type="number"
-          inputMode="numeric"
+          inputMode="decimal"
+          step={0.1}
           value={odometer}
           onChange={(e) => setOdometer(e.target.value)}
           className="h-14 mt-2 text-2xl font-plate font-bold tabular text-center"

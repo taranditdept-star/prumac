@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKm } from "./odometer";
 import { uuid } from "./uuid";
 
 const PURPOSES = ["delivery", "sales", "collection", "maintenance_run", "admin", "personal", "other"] as const;
@@ -15,8 +16,8 @@ export const mileageSchema = z
     destination_label: z.string().trim().max(120).optional().nullable(),
     route_description: z.string().trim().max(500).optional().nullable(),
     purpose: z.enum(PURPOSES).default("delivery"),
-    start_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
-    end_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+    start_odometer_km: odometerKm(),
+    end_odometer_km: odometerKm(),
   })
   .refine((d) => d.end_odometer_km >= d.start_odometer_km, {
     message: "End mileage must be at least the start mileage",

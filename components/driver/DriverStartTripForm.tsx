@@ -158,9 +158,9 @@ export function DriverStartTripForm({
         <Input
           name="start_odometer_km"
           type="number"
-          inputMode="numeric"
+          inputMode="decimal"
           min={0}
-          step={1}
+          step={0.1}
           defaultValue={currentOdometer}
           className="h-14 text-2xl font-plate font-bold tabular text-center bg-white"
           required

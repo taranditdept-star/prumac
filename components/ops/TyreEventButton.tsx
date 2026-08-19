@@ -81,7 +81,9 @@ export function TyreEventButton({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="odometer_km">Odometer (km)</Label>
-              <Input id="odometer_km" name="odometer_km" type="number" min={0} className="font-plate" />
+              <Input id="odometer_km" name="odometer_km" type="number"
+              inputMode="decimal"
+              step={0.1} min={0} className="font-plate" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tread_depth_mm">Tread (mm)</Label>

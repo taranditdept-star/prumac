@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
 export const repairClaimCreateSchema = z.object({
@@ -7,7 +8,7 @@ export const repairClaimCreateSchema = z.object({
   description: z.string().min(5, "Describe the repair").max(1000),
   amount: z.coerce.number().min(0.01, "Enter the amount spent").max(1_000_000),
   currency: z.string().min(1).max(8).default("USD"),
-  odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
+  odometer_km: odometerKmOptional(),
 });
 
 export const repairClaimApproveSchema = z.object({

@@ -185,6 +185,8 @@ export function AccidentReportForm({ vehicle, activeTripId }: AccidentReportForm
             <input
               name="odometer_km"
               type="number"
+              inputMode="decimal"
+              step={0.1}
               min={0}
               defaultValue={draft.odometer_km || vehicle.current_odometer_km}
               className={`${fieldClass} font-plate`}

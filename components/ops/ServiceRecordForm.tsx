@@ -141,6 +141,8 @@ export function ServiceRecordForm({ vehicles, subsidiaries }: ServiceRecordFormP
             </Label>
             <Input
               type="number"
+              step={0.1}
+              inputMode="decimal"
               name="odometer_km"
               value={odometer}
               onChange={(e) => setOdometer(e.target.value)}

@@ -276,6 +276,8 @@ export function VehicleForm({ vehicle, subsidiaries, onSaved }: VehicleFormProps
               id="current_odometer_km"
               name="current_odometer_km"
               type="number"
+              inputMode="decimal"
+              step={0.1}
               min={0}
               className="font-plate"
               defaultValue={vehicle?.current_odometer_km ?? 0}

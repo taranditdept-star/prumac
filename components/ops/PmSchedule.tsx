@@ -125,7 +125,9 @@ export function PmPlanForm({ vehicles }: { vehicles: VehicleOption[] }) {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="last_done_km">Last done (km)</Label>
-          <Input id="last_done_km" name="last_done_km" type="number" min={0} />
+          <Input id="last_done_km" name="last_done_km" type="number"
+              inputMode="decimal"
+              step={0.1} min={0} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="last_done_at">Last done (date)</Label>

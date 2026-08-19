@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKm } from "./odometer";
 import { uuid } from "./uuid";
 
 const VEHICLE_CLASSES = [
@@ -47,7 +48,7 @@ export const vehicleSchema = z.object({
   is_pool: z.boolean().optional().default(false),
   home_branch: z.string().max(60).nullable().optional(),
   default_subsidiary_id: uuid().nullable().optional(),
-  current_odometer_km: z.number().int().min(0).default(0),
+  current_odometer_km: odometerKm().default(0),
   vin: z.string().max(20).nullable().optional(),
   engine_number: z.string().max(30).nullable().optional(),
   service_interval_km: z.number().int().positive().default(5000),

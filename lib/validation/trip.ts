@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKm, odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
 const PURPOSES = [
@@ -13,12 +14,12 @@ export const tripStartSchema = z.object({
   route_description: z.string().max(500).nullable().optional(),
   origin_label: z.string().max(120).nullable().optional(),
   destination_label: z.string().max(120).nullable().optional(),
-  start_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+  start_odometer_km: odometerKm(),
 });
 
 export const tripEndSchema = z.object({
   trip_id: uuid(),
-  end_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+  end_odometer_km: odometerKm(),
   fuel_litres: z.coerce.number().min(0).max(2000).optional().nullable(),
   fuel_amount: z.coerce.number().min(0).max(100000).optional().nullable(),
   load_count: z.coerce.number().int().min(0).max(1000).optional().nullable(),
@@ -36,8 +37,8 @@ export const tripEditSchema = z.object({
   route_description: z.string().max(500).nullable().optional(),
   origin_label: z.string().max(120).nullable().optional(),
   destination_label: z.string().max(120).nullable().optional(),
-  start_odometer_km: z.coerce.number().int().min(0).max(9_999_999),
-  end_odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
+  start_odometer_km: odometerKm(),
+  end_odometer_km: odometerKmOptional(),
   fuel_litres: z.coerce.number().min(0).max(2000).nullable().optional(),
   fuel_amount: z.coerce.number().min(0).max(100000).nullable().optional(),
   load_count: z.coerce.number().int().min(0).max(1000).nullable().optional(),

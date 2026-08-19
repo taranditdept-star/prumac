@@ -123,7 +123,9 @@ export function TyreForm({ vehicles }: { vehicles: VehicleOption[] }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fitted_odometer_km">Fitted odometer (km)</Label>
-              <Input id="fitted_odometer_km" name="fitted_odometer_km" type="number" min={0} className="font-plate" />
+              <Input id="fitted_odometer_km" name="fitted_odometer_km" type="number"
+              inputMode="decimal"
+              step={0.1} min={0} className="font-plate" />
             </div>
           </div>
         )}

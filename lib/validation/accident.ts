@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
 const SEVERITIES = ["minor", "moderate", "severe", "fatal"] as const;
@@ -13,7 +14,7 @@ export const accidentCreateSchema = z.object({
     .min(1, "When did it happen?")
     .refine((v) => !Number.isNaN(new Date(v).getTime()), "Enter a valid date and time"),
   location_description: z.string().min(3, "Where did it happen?").max(500),
-  odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
+  odometer_km: odometerKmOptional(),
   lat: z.coerce.number().min(-90).max(90).nullable().optional(),
   lng: z.coerce.number().min(-180).max(180).nullable().optional(),
   weather: z.string().max(60).nullable().optional(),

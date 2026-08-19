@@ -130,7 +130,8 @@ export function RepairClaimForm({ vehicles, subsidiaries }: Props) {
         <input
           name="odometer_km"
           type="number"
-          inputMode="numeric"
+              step={0.1}
+          inputMode="decimal"
           min="0"
           defaultValue={selectedVehicle?.current_odometer_km ?? ""}
           className={`${fieldClass} font-plate`}

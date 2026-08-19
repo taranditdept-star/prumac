@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
 export const fuelLogSchema = z.object({
@@ -7,7 +8,7 @@ export const fuelLogSchema = z.object({
   trip_id: uuid().nullable().optional(),
   fuel_card_id: uuid().nullable().optional(),
   filled_at: z.string().min(1),
-  odometer_km: z.coerce.number().int().min(0).nullable().optional(),
+  odometer_km: odometerKmOptional(),
   litres: z.coerce.number().positive(),
   price_per_litre: z.coerce.number().min(0).nullable().optional(),
   total_cost: z.coerce.number().min(0),

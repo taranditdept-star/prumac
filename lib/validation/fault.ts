@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKmOptional } from "./odometer";
 import { uuid } from "./uuid";
 
 const SEVERITIES = ["low", "medium", "high", "critical"] as const;
@@ -23,7 +24,7 @@ export const faultCreateSchema = z.object({
   category: z.string().min(1).max(40),
   title: z.string().min(3, "Title is required").max(120),
   description: z.string().min(5, "Describe the fault").max(2000),
-  odometer_km: z.coerce.number().int().min(0).max(9_999_999).nullable().optional(),
+  odometer_km: odometerKmOptional(),
   lat: z.coerce.number().min(-90).max(90).nullable().optional(),
   lng: z.coerce.number().min(-180).max(180).nullable().optional(),
 });

@@ -238,8 +238,9 @@ export function TripStartForm({ vehicles, drivers, subsidiaries }: TripStartForm
             <Input
               name="start_odometer_km"
               type="number"
+              inputMode="decimal"
               min={0}
-              step={1}
+              step={0.1}
               value={odometer}
               onChange={(e) => setOdometer(e.target.value)}
               className={inputCls + " font-plate text-base"}

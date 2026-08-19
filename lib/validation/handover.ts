@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { odometerKm } from "./odometer";
 import { uuid } from "./uuid";
 
 const itemSchema = z.object({
@@ -11,7 +12,7 @@ export const initiateHandoverSchema = z.object({
   vehicle_id: uuid(),
   to_driver_id: uuid(),
   template_id: uuid(),
-  odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+  odometer_km: odometerKm(),
   inspection_notes: z.string().max(2000).optional(),
   handover_notes: z.string().max(2000).optional(),
   items: z.array(itemSchema).min(1),
@@ -20,7 +21,7 @@ export const initiateHandoverSchema = z.object({
 export const confirmTakeoverSchema = z.object({
   handover_id: uuid(),
   template_id: uuid(),
-  odometer_km: z.coerce.number().int().min(0).max(9_999_999),
+  odometer_km: odometerKm(),
   notes: z.string().max(2000).optional(),
   items: z.array(itemSchema).min(1),
 });

@@ -165,6 +165,8 @@ export function FaultReportForm({ vehicle, activeTripId }: FaultReportFormProps)
         <Input
           name="odometer_km"
           type="number"
+              inputMode="decimal"
+              step={0.1}
           min={0}
           defaultValue={vehicle.current_odometer_km}
           className={inputCls + " font-plate"}
