@@ -43,6 +43,7 @@ const SECTIONS = [
       { href: "/live", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
       { href: "/assistant", label: "Chitsano AI", icon: Sparkles, roles: ALL },
       { href: "/live/map", label: "Live Map", icon: MapPin, roles: ALL },
+      { href: "/dispatch", label: "Dispatch", icon: ClipboardList, roles: ALL },
       { href: "/trips", label: "Trips", icon: Map, roles: ALL },
       { href: "/trips/log", label: "Log mileage", icon: ClipboardList, roles: ALL },
     ],

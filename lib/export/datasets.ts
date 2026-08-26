@@ -261,6 +261,43 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
     ],
   },
 
+  jobs: {
+    key: "jobs",
+    title: "Transport jobs",
+    roles: ["fleet_manager", "admin"],
+    orientation: "landscape",
+    fetch: async (supabase, params) => {
+      const status = params.get("status");
+      const make = () => {
+        const q = supabase.schema("app").from("transport_jobs")
+          .select(`reference, status, pickup_label, dropoff_label, distance_km, load_count,
+                   cargo_description, required_at, is_urgent, quoted_amount, quoted_currency,
+                   created_at, subsidiaries(name),
+                   vehicles(plate_number, make, model), drivers(profiles(full_name))`)
+          .order("created_at", { ascending: false });
+        return status && status !== "all" ? q.eq("status", status) : q;
+      };
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      const pipeline = rows.reduce((t, r) => t + Number(r.quoted_amount ?? 0), 0);
+      return { rows, error, subtitle: `${money(pipeline)} quoted` };
+    },
+    columns: [
+      { header: "Reference", value: (r) => r.reference, width: 14 },
+      { header: "Status", value: (r) => title(r.status), width: 13 },
+      { header: "Customer", value: (r) => r.subsidiaries?.name ?? "", width: 20 },
+      { header: "From", value: (r) => r.pickup_label ?? "", width: 20 },
+      { header: "To", value: (r) => r.dropoff_label ?? "", width: 20 },
+      { header: "Distance km", value: (r) => num(r.distance_km), width: 12, numeric: true },
+      { header: "Loads", value: (r) => num(r.load_count), width: 8, numeric: true },
+      { header: "Quoted", value: (r) => num(r.quoted_amount), width: 12, numeric: true },
+      { header: "Vehicle", value: (r) => r.vehicles?.plate_number ?? "", width: 12 },
+      { header: "Driver", value: (r) => r.drivers?.profiles?.full_name ?? "", width: 20 },
+      { header: "Needed by", value: (r) => datetime(r.required_at), width: 16 },
+      { header: "Urgent", value: (r) => (r.is_urgent ? "Yes" : ""), width: 8 },
+      { header: "Logged", value: (r) => datetime(r.created_at), width: 16 },
+    ],
+  },
+
   faults: {
     key: "faults",
     title: "Faults",
