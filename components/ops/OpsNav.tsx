@@ -30,6 +30,7 @@ import {
   CalendarCheck,
   PiggyBank,
   Sparkles,
+  HandCoins,
 } from "lucide-react";
 import type { AppRole } from "@/types/domain";
 
@@ -81,6 +82,7 @@ const SECTIONS = [
     items: [
       { href: "/finance", label: "Finance", icon: PiggyBank, roles: ALL },
       { href: "/invoices", label: "Invoices", icon: Receipt, roles: ALL },
+      { href: "/receipts", label: "Receipts", icon: HandCoins, roles: ALL },
       { href: "/repairs", label: "Repair claims", icon: Wrench, roles: ALL },
       { href: "/vehicles/lifecycle", label: "Depreciation", icon: Banknote, roles: ALL },
       { href: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"] },

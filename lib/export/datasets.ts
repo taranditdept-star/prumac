@@ -17,6 +17,25 @@ const title = (v: string | null | undefined): string =>
 const num = (v: unknown): number | null =>
   v === null || v === undefined || v === "" ? null : Number(v);
 
+
+const money = (n: number): string =>
+  `USD ${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** Positive = past due. Blank for an invoice with no due date. */
+const daysOverdue = (due: string | null | undefined): number | null => {
+  if (!due) return null;
+  const d = Math.floor((Date.now() - new Date(due).getTime()) / 86_400_000);
+  return d > 0 ? d : 0;
+};
+const agingBucket = (due: string | null | undefined): string => {
+  const d = daysOverdue(due);
+  if (d === null) return "";
+  if (d === 0) return "Current";
+  if (d <= 30) return "1-30 days";
+  if (d <= 60) return "31-60 days";
+  if (d <= 90) return "61-90 days";
+  return "90+ days";
+};
+
 interface AnyRow { [k: string]: any }   // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
@@ -169,6 +188,76 @@ export const DATASETS: Record<string, ExportDataset<AnyRow>> = {
       { header: "Total due", value: (r) => num(r.total_due), width: 12, numeric: true },
       { header: "Paid", value: (r) => num(r.amount_paid), width: 12, numeric: true },
       { header: "Outstanding", value: (r) => num(r.balance_outstanding), width: 13, numeric: true },
+    ],
+  },
+
+  receivables: {
+    key: "receivables",
+    title: "Aged debtors",
+    roles: ["admin", "fleet_manager"],
+    orientation: "landscape",
+    fetch: async (supabase) => {
+      const make = () => supabase.schema("app").from("invoices")
+        .select(`invoice_number, issued_at, due_at, status, currency,
+                 total_due, amount_paid, balance_outstanding, subsidiaries(name, code)`)
+        .in("status", ["issued", "overdue"])
+        .gt("balance_outstanding", 0)
+        .order("due_at", { ascending: true, nullsFirst: false });
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      const owed = rows.reduce((t, r) => t + Number(r.balance_outstanding ?? 0), 0);
+      return { rows, error, subtitle: `${money(owed)} outstanding` };
+    },
+    columns: [
+      { header: "Customer", value: (r) => r.subsidiaries?.name ?? "", width: 22 },
+      { header: "Invoice no.", value: (r) => r.invoice_number, width: 16 },
+      { header: "Issued", value: (r) => date(r.issued_at), width: 13 },
+      { header: "Due", value: (r) => date(r.due_at), width: 13 },
+      { header: "Days overdue", value: (r) => daysOverdue(r.due_at), width: 12, numeric: true },
+      { header: "Bucket", value: (r) => agingBucket(r.due_at), width: 12 },
+      { header: "Invoiced", value: (r) => num(r.total_due), width: 13, numeric: true },
+      { header: "Paid", value: (r) => num(r.amount_paid), width: 12, numeric: true },
+      { header: "Outstanding", value: (r) => num(r.balance_outstanding), width: 13, numeric: true },
+    ],
+  },
+
+  unbilled: {
+    key: "unbilled",
+    title: "Completed trips not yet invoiced",
+    roles: ["admin", "fleet_manager"],
+    orientation: "landscape",
+    fetch: async (supabase) => {
+      // Revenue already earned that nobody has raised an invoice for.
+      const make = () => supabase.schema("app").from("trips")
+        .select(`id, started_at, ended_at, start_odometer_km, end_odometer_km, load_count,
+                 purpose, purpose_detail,
+                 vehicles(plate_number, make, model),
+                 drivers(profiles(full_name)), subsidiaries(name)`)
+        .eq("status", "completed")
+        .order("started_at", { ascending: false });
+      const { rows, error } = await fetchAll<AnyRow>(make);
+      if (error) return { rows, error };
+      // This lookup must page too: PostgREST caps a response at 1000 rows, and a
+      // truncated "already billed" list reports billed trips as unbilled —
+      // which would have someone invoicing the same trip twice.
+      const { rows: billed } = await fetchAll<AnyRow>(() =>
+        supabase.schema("app").from("invoice_line_items")
+          .select("trip_id").not("trip_id", "is", null).order("trip_id"));
+      const seen = new Set(billed.map((b) => b.trip_id));
+      const unbilled = rows.filter((r) => !seen.has(r.id));
+      return { rows: unbilled, subtitle: `${unbilled.length} trips` };
+    },
+    columns: [
+      { header: "Started", value: (r) => datetime(r.started_at), width: 16 },
+      { header: "Billed to", value: (r) => r.subsidiaries?.name ?? "(no customer set)", width: 20 },
+      { header: "Plate", value: (r) => r.vehicles?.plate_number ?? "", width: 11 },
+      { header: "Driver", value: (r) => r.drivers?.profiles?.full_name ?? "", width: 20 },
+      { header: "Purpose", value: (r) => purposeText(r.purpose, r.purpose_detail), width: 26 },
+      {
+        header: "Distance km", width: 12, numeric: true,
+        value: (r) => (r.start_odometer_km != null && r.end_odometer_km != null
+          ? Math.round((Number(r.end_odometer_km) - Number(r.start_odometer_km)) * 10) / 10 : null),
+      },
+      { header: "Loads", value: (r) => num(r.load_count), width: 8, numeric: true },
     ],
   },
 

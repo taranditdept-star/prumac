@@ -5,6 +5,7 @@ import { getDebtors, resolvePeriod } from "@/lib/finance/reports";
 import { fmtMoney } from "@/lib/finance/accounts";
 import { PeriodFilter } from "@/components/finance/PeriodFilter";
 import { AgingBars } from "@/components/finance/FinanceCharts";
+import { ExportMenu } from "@/components/primitives/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
             </span>
             <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">Debtors &amp; Aging</h1>
             <p className="mt-2 text-sm text-slate-300">{period.label}</p>
+            <div className="mt-4"><ExportMenu dataset="receivables" label="Export statement" /></div>
           </div>
           <div className="rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-2"><PeriodFilter asAt /></div>
         </div>
