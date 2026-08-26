@@ -4,7 +4,11 @@
 // fallback offline); cache-first for static assets. API/auth calls are never
 // cached. Keep this conservative — GPS sync has its own IndexedDB buffer.
 
-const CACHE = "prumac-v2";
+const CACHE = "prumac-v3";
+// A navigation that never resolves is why the app "sticks on load": on weak
+// mobile data fetch() has no timeout of its own, so the page waits forever
+// instead of falling back to the cached shell.
+const NAV_TIMEOUT_MS = 5000;
 const APP_SHELL = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -32,17 +36,37 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+      (async () => {
+        let timer;
+        try {
+          const res = await Promise.race([
+            fetch(request),
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject(new Error("nav-timeout")), NAV_TIMEOUT_MS);
+            }),
+          ]);
+          // Only the shell is cached. Caching every authenticated page would
+          // leave one driver's screens readable by the next person on a shared
+          // handset, and stale HTML can point at chunks a deploy has removed.
+          if (url.pathname === "/" && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy)).catch(() => {});
+          }
           return res;
-        })
-        .catch(() => caches.match(request).then((r) => r || caches.match("/"))),
+        } catch (err) {
+          const cached = (await caches.match(request)) || (await caches.match("/"));
+          if (cached) return cached;
+          throw err;
+        } finally {
+          clearTimeout(timer);
+        }
+      })(),
     );
     return;
   }
 
+  // Next.js fingerprints these filenames, so a cache hit is always the right
+  // file and cache-first is safe. A miss goes to network and is stored.
   if (request.destination === "image" || request.destination === "font" || request.destination === "style" || request.destination === "script") {
     event.respondWith(
       caches.match(request).then(
