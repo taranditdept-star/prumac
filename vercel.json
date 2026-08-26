@@ -1,8 +1,23 @@
 {
-  "regions": ["cdg1"],
+  "regions": [
+    "cdg1"
+  ],
   "crons": [
-    { "path": "/api/cron/daily", "schedule": "0 4 * * *" },
-    { "path": "/api/cron/invoices", "schedule": "0 6 1 * *" },
-    { "path": "/api/cron/briefing", "schedule": "0 5 * * 1-6" }
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/invoices",
+      "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/cron/briefing",
+      "schedule": "0 5 * * 1-6"
+    },
+    {
+      "path": "/api/cron/watch",
+      "schedule": "20 5 * * 1-6"
+    }
   ]
 }
