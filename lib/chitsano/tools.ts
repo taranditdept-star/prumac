@@ -381,6 +381,10 @@ export const CAPABILITIES = `I'm Chitsano, your built-in fleet assistant. I can 
 • Logins — "who isn't logging in"
 • Finance — "how are we doing financially", "who owes us money"
 
-And I can do two things for you (I'll ask you to confirm first):
+And I can do these for you (I'll always ask you to confirm first):
 • Assign a vehicle — "assign AFQ 3770 to Alec"
-• Make a vehicle shared — "make AFQ 3770 a pool car"`;
+• Make a vehicle shared — "make AFQ 3770 a pool car"
+• Log a transport job — "log a job for CT Mining from Harare to Gwanda 420km"
+• Price a run — "what would we charge CT Mining for 420km in AGH 5221?"
+• Record money in — "Flora Gas paid 12000 today by transfer"
+• Move a fault along — "resolve the fault on AHO 3790"`;

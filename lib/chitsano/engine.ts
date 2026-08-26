@@ -1,5 +1,6 @@
 import "server-only";
 import { READ_TOOLS, WRITE_TOOLS, CAPABILITIES } from "./tools";
+import { EXTRA_WRITE_TOOLS } from "./write-tools";
 import type { Reply } from "./shared";
 
 // Chitsano's brain — a free, built-in rules engine. It reads the manager's
@@ -42,6 +43,16 @@ function stripTail(s: string): string {
   return cut || s.trim();
 }
 
+/**
+ * Every plate in the fleet is three letters and four digits — "AFQ 3770".
+ * Allowing three digits made ordinary phrases look like plates: "for 150" in
+ * "price a run for Flora Gas for 150 km" matched as a vehicle.
+ */
+const PLATE_RE = /\b([a-z]{3}\s?\d{4})\b/i;
+function plateIn(text: string): string {
+  return (text.match(PLATE_RE) ?? [])[1] ?? "";
+}
+
 export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promise<Reply> {
   const text = (raw ?? "").trim();
   const t = text.toLowerCase();
@@ -67,6 +78,72 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
     }
   }
 
+  // Record money in — "Flora Gas paid 12,000 today by transfer".
+  const paid = t.match(
+    /(.+?)\s+(?:paid|has paid|settled|sent|deposited|transferred)\s+(?:us\s+)?\$?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  );
+  // "how much did X pay us?" is a question about money, not a receipt.
+  if (paid && !/\bhow much\b/.test(t)) {
+    const customer = clean(stripTail(paid[1]));
+    const amount = Number(paid[2].replace(/,/g, ""));
+    const method = /\b(transfer|eft|bank)\b/.test(t) ? "bank_transfer"
+      : /\bcash\b/.test(t) ? "cash"
+      : /\b(ecocash|mobile money)\b/.test(t) ? "ecocash"
+      : /\b(cheque|check)\b/.test(t) ? "cheque" : null;
+    try {
+      const p = await EXTRA_WRITE_TOOLS.record_receipt.propose({ customer, amount, method });
+      return { type: "proposal", text: "", proposal: { action: "record_receipt", ...p } };
+    } catch (e) { return msg(err(e)); }
+  }
+
+  // Price a run. Both "charge CT Mining for 420km in AGH 5221" and "price a run
+  // for Flora Gas for 150 km with AFQ 3770" put the customer before the distance.
+  const quote = t.match(
+    /(?:quote|charge|price|cost)\b(?:\s+(?:a\s+)?(?:run|job|trip))?\s+(?:for\s+)?(.+?)\s+(?:for\s+)?\d+(?:\.\d+)?\s*(?:km|kilomet)/i,
+  );
+  if (quote) {
+    const km = Number((t.match(/(\d+(?:\.\d+)?)\s*(?:km|kilomet)/) ?? [])[1]);
+    const customer = clean(stripTail(quote[1]))
+      .replace(/\b(for|in|with|using|on|run|job|trip)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    try {
+      const p = await EXTRA_WRITE_TOOLS.quote_work.propose({
+        customer, vehicle: plateIn(text), distance_km: km,
+      });
+      return { type: "proposal", text: "", proposal: { action: "quote_work", ...p } };
+    } catch (e) { return msg(err(e)); }
+  }
+
+  // Log a job — "log a job for CT Mining from Harare to Gwanda, 420km".
+  const job = t.match(
+    /(?:log|book|create|add|new)\s+(?:a\s+)?(?:transport\s+)?job\b(?:\s+for\s+(.+?))?(?:\s+from\s+(.+?))?(?:\s+to\s+(.+?))?$/i,
+  );
+  if (job) {
+    const km = Number((t.match(/(\d+(?:\.\d+)?)\s*(?:km|kilomet)/) ?? [])[1]);
+    const trimKm = (v: string) => clean(v.replace(/\b\d+(?:\.\d+)?\s*km\b.*$/i, ""));
+    try {
+      const p = await EXTRA_WRITE_TOOLS.log_job.propose({
+        customer: clean(stripTail(job[1] ?? "")),
+        pickup: trimKm(job[2] ?? ""),
+        dropoff: trimKm(job[3] ?? ""),
+        distance_km: Number.isFinite(km) ? km : undefined,
+      });
+      return { type: "proposal", text: "", proposal: { action: "log_job", ...p } };
+    } catch (e) { return msg(err(e)); }
+  }
+
+  // Move a fault along — "resolve the fault on AHO 3790".
+  if (/\bfault\b/.test(t) && /\b(resolve[d]?|fix(ed)?|close[d]?|acknowledge[d]?|ack)\b/.test(t)) {
+    const status = /\b(resolve[d]?|fixed|close[d]?|sorted|repaired)\b/.test(t) ? "resolved" : "acknowledged";
+    const subject = clean(
+      text.replace(/\b(resolve[d]?|fix(ed)?|close[d]?|acknowledge[d]?|ack|the|fault|on|please)\b/gi, " "),
+    );
+    try {
+      const p = await EXTRA_WRITE_TOOLS.set_fault_status.propose({ fault: subject, status });
+      return { type: "proposal", text: "", proposal: { action: "set_fault_status", ...p } };
+    } catch (e) { return msg(err(e)); }
+  }
   // Mark / unmark a pool vehicle (needs an action verb + the word "pool").
   if (/\bpool\b/.test(t) && /\b(make|mark|set|turn|unmark|remove|change)\b/.test(t)) {
     const isPool = !/\b(not|un ?mark|unmark|remove|stop|no longer|out of)\b/.test(t);
@@ -97,7 +174,7 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
 
   if (/\b(faults?|defects?|breakdowns?|broke\s?down|snags?|what.?s? broken)\b/.test(t)) {
     const status = /\b(fixed|resolved|repaired|sorted|done)\b/.test(t) ? "resolved" : undefined;
-    const plate = text.match(/\b([a-z]{2,3}\s?\d{3,4})\b/i);
+    const plate = text.match(PLATE_RE);
     const params: Record<string, string> = {};
     if (status) params.status = status;
     if (plate) params.vehicle = plate[1].trim();
@@ -116,7 +193,7 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
   }
 
   if (/\b(trips?|mileage|journeys?|routes?|kilomet|\bkm\b|distance|travell?ed)\b/.test(t)) {
-    const plate = text.match(/\b([a-z]{2,3}\s?\d{3,4})\b/i); // a plate anywhere, e.g. "AFQ 3770"
+    const plate = text.match(PLATE_RE); // a plate anywhere, e.g. "AFQ 3770"
     const byMatch = text.match(/\bby\s+(.+)$/i); // "…by <driver>"
     const forMatch = text.match(/\b(?:for|of)\s+(.+)$/i); // "…for <vehicle>"
     const params: Record<string, string> = {};
@@ -162,7 +239,9 @@ export async function runAction(
   params: Record<string, unknown>,
   ctx: { profileId: string },
 ): Promise<string> {
-  const tool = WRITE_TOOLS[action];
+  // Both maps: a proposal from write-tools.ts must be executable on confirm,
+  // otherwise the manager taps yes and is told the action does not exist.
+  const tool = WRITE_TOOLS[action] ?? EXTRA_WRITE_TOOLS[action];
   if (!tool) return "That action isn't available.";
   return tool.execute(params ?? {}, ctx);
 }
