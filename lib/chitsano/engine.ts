@@ -1,6 +1,8 @@
 import "server-only";
 import { READ_TOOLS, WRITE_TOOLS, CAPABILITIES } from "./tools";
 import { EXTRA_WRITE_TOOLS } from "./write-tools";
+import { understand } from "./nlu";
+import { resolveRanker } from "./rankings";
 import type { Reply } from "./shared";
 
 // Chitsano's brain — a free, built-in rules engine. It reads the manager's
@@ -156,6 +158,26 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
     }
   }
 
+  // ── RANKINGS ───────────────────────────────────────────────────────────────
+  // "Who logs in the most", "which vehicle does the most km", "who owes us the
+  // most". These are the same topics the reads cover but the opposite question,
+  // and none of them had an answer before — the login tool, for instance, only
+  // ever reported who was NOT signing in.
+  const asked = understand(text);
+  if ((asked.shape === "rank_top" || asked.shape === "rank_bottom") && asked.topic) {
+    const ranker = resolveRanker(asked.topic, asked.subject);
+    // "who isn't logging in" is a bottom-ranking question the old pattern
+    // already answered well, so leave that one to the reads below.
+    const alreadyHandled = asked.topic === "logins" && asked.shape === "rank_bottom";
+    if (ranker && !alreadyHandled) {
+      try {
+        return msg(await ranker(asked.shape));
+      } catch {
+        /* fall through to the ordinary reads */
+      }
+    }
+  }
+
   // ── READS ──────────────────────────────────────────────────────────────────
   if (/\b(log ?ins?|logging in|logged in|sign ?in|signing in|signed in|dormant|inactive|not using|who.*(using|online))\b/.test(t)) {
     return msg(await READ_TOOLS.get_login_activity.run({}));
@@ -230,8 +252,31 @@ export async function ask(raw: string, opts?: { allowFinance?: boolean }): Promi
   if (/\b(help|what can (i|you)|what do you do|who are you|how do you work|commands?)\b/.test(t)) {
     return msg(CAPABILITIES);
   }
+
+  // Last resort before giving up: score the words instead of matching patterns.
+  // The old fallback fired on anything the regexes did not anticipate — "who
+  // logs in the most" among them, because the pattern knew "logging in" and
+  // "logged in" but not "logs in".
+  const guess = understand(text);
+  if (guess.topic && guess.score >= 2) {
+    const reader = FALLBACK_READS[guess.topic];
+    if (reader) return msg(await reader());
+  }
+
   return msg(FALLBACK);
 }
+
+/** What to read when the scorer recognises a topic the patterns missed. */
+const FALLBACK_READS: Record<string, () => Promise<string>> = {
+  logins: () => READ_TOOLS.get_login_activity.run({}),
+  vehicles: () => READ_TOOLS.list_vehicles.run({}),
+  drivers: () => READ_TOOLS.list_drivers.run({}),
+  trips: () => READ_TOOLS.list_recent_trips.run({}),
+  faults: () => READ_TOOLS.list_faults.run({}),
+  accidents: () => READ_TOOLS.list_accidents.run({}),
+  attendance: () => READ_TOOLS.get_attendance_today.run({}),
+  finance: () => READ_TOOLS.get_finance_summary.run({}),
+};
 
 /** Execute a confirmed action (or record a decline) against the write whitelist. */
 export async function runAction(

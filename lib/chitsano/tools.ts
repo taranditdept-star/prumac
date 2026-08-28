@@ -381,6 +381,11 @@ export const CAPABILITIES = `I'm Chitsano, your built-in fleet assistant. I can 
 • Logins — "who isn't logging in"
 • Finance — "how are we doing financially", "who owes us money"
 
+I can also rank things — just ask for the most or the least:
+• "who logs in the most"        • "which driver does the most trips"
+• "which vehicle does the most km"  • "which car breaks down the most"
+• "who owes us the most"        • "which vehicle burns the most fuel"
+
 And I can do these for you (I'll always ask you to confirm first):
 • Assign a vehicle — "assign AFQ 3770 to Alec"
 • Make a vehicle shared — "make AFQ 3770 a pool car"
