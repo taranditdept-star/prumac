@@ -3,17 +3,24 @@ import "server-only";
 /**
  * Chitsano's accident review — a RULES-BASED comparison, not a language model.
  *
- * Chitsano has no LLM (deliberately: no API key, no cost). So this does what a
- * keyword engine honestly can:
- *   • spot which causal factors each account raises (brakes, tyres, speed, …)
- *   • flag where the accounts DISAGREE — one side raises a factor the other is
- *     silent on, or they blame different things
- *   • compare stated numbers (speed) and hard facts (injuries, police, third party)
- *   • suggest a verdict with a confidence level
+ * The first version counted keywords, and on a real committee transcript it
+ * produced four accusations that were the opposite of the document:
  *
- * What it CANNOT do, and must never imply: understand the narrative, weigh
- * credibility, or judge fault. Every output is framed as "for the committee to
- * confirm", and the summary says outright that it is keyword-based.
+ *   "committee raises Alcohol"  ← "Were you under the influence of alcohol, or
+ *                                  were you sober?  Driver: Confirmed he did
+ *                                  not consume any alcohol."
+ *   "committee raises Fatigue"  ← a bystander's remark, "if he is sleeping
+ *                                  [alive], thank God"
+ *   "committee raises Phone"    ← "his phone was out of power"
+ *   "committee raises Speed"    ← "he was not speeding (well below 80 km/h)"
+ *
+ * In a disciplinary file that is not a glitch, it is an accusation. So a factor
+ * now counts as RAISED only when a sentence asserts it: questions and denials
+ * are read as what they are, and a word appearing in one account but not the
+ * other is reported as exactly that — not as a discrepancy.
+ *
+ * What it still cannot do, and must never imply: understand the narrative,
+ * weigh credibility, or judge fault.
  */
 
 export interface ReviewInput {
@@ -33,10 +40,8 @@ export interface ReviewInput {
 }
 
 export interface ReviewOutput {
-  /** One of the app's verdict values. */
   verdict: string;
   confidence: "low" | "medium";
-  /** Formatted markdown-ish text stored as the verdict comment. */
   comment: string;
   discrepancyCount: number;
 }
@@ -44,35 +49,73 @@ export interface ReviewOutput {
 interface Factor {
   key: string;
   label: string;
-  /** Words that indicate the factor is being raised. */
   patterns: RegExp;
-  /** Whose responsibility the factor tends to point at. */
   points: "vehicle" | "driver" | "third_party" | "conditions";
 }
 
+/**
+ * Patterns for anything that points at the driver are deliberately narrow: they
+ * must describe the conduct, not merely name it. "phone" alone matched "his
+ * phone was out of power"; "sleeping" matched someone else's turn of phrase.
+ */
 const FACTORS: Factor[] = [
   { key: "brakes", label: "Brakes", patterns: /\bbrake(s|d|ing)?\b|\bstopping distance\b/i, points: "vehicle" },
   { key: "tyres", label: "Tyres", patterns: /\btyre(s)?\b|\btire(s)?\b|\bburst\b|\bpuncture\b|\btread\b/i, points: "vehicle" },
   { key: "steering", label: "Steering", patterns: /\bsteer(ing|ed)?\b|\bwheel align|\btie rod\b/i, points: "vehicle" },
-  { key: "mechanical", label: "Other mechanical", patterns: /\bmechanical\b|\bsuspension\b|\bengine fail|\bgearbox\b|\bbreakdown\b/i, points: "vehicle" },
-  { key: "speed", label: "Speed", patterns: /\bspeed(ing|ed)?\b|\btoo fast\b|\bover the limit\b|\bexcessive speed\b|\d{2,3}\s?km\/?h/i, points: "driver" },
-  { key: "attention", label: "Attention / phone", patterns: /\bphone\b|\btexting\b|\bdistract(ed|ion)\b|\bnot paying attention\b/i, points: "driver" },
-  { key: "fatigue", label: "Fatigue", patterns: /\bfatigue(d)?\b|\btired\b|\bsleep(y|ing)?\b|\bdozed\b|\bexhaust(ed|ion)\b/i, points: "driver" },
+  { key: "mechanical", label: "Other mechanical", patterns: /\bmechanical\b|\bsuspension\b|\bengine fail|\bgearbox\b/i, points: "vehicle" },
+  { key: "speed", label: "Speed", patterns: /\bspeeding\b|\btoo fast\b|\bover the limit\b|\bexcessive speed\b/i, points: "driver" },
+  { key: "attention", label: "Attention / phone", patterns: /\bon (the|his|her) phone\b|\btexting\b|\busing (the|his|her) phone\b|\bdistract(ed|ion)\b|\bnot paying attention\b/i, points: "driver" },
+  { key: "fatigue", label: "Fatigue", patterns: /\bfatigue(d)?\b|\bdozed\b|\bfell asleep\b|\basleep at the wheel\b|\bnodding off\b/i, points: "driver" },
   { key: "alcohol", label: "Alcohol", patterns: /\balcohol\b|\bdrunk\b|\bintoxicat|\bbeer\b|\bdrinking\b/i, points: "driver" },
   { key: "reckless", label: "Reckless / negligent driving", patterns: /\breckless\b|\bnegligen(t|ce)\b|\bdangerous driving\b|\bovertak(e|ing)\b/i, points: "driver" },
   { key: "third_party", label: "Another vehicle / third party", patterns: /\boncoming\b|\banother (vehicle|car|truck)\b|\bthird party\b|\bhit (me|us)\b|\bencroach/i, points: "third_party" },
   { key: "pedestrian", label: "Pedestrian / animal", patterns: /\bpedestrian\b|\banimal\b|\bcow\b|\bdog\b|\bgoat\b/i, points: "third_party" },
   { key: "road", label: "Road condition", patterns: /\bpothole(s)?\b|\bgravel\b|\bwet road\b|\bslippery\b|\bunmarked\b|\bbad road\b/i, points: "conditions" },
-  { key: "weather", label: "Weather / visibility", patterns: /\brain(ing|y)?\b|\bfog(gy)?\b|\bmist\b|\bdark(ness)?\b|\bglare\b|\bvisibility\b/i, points: "conditions" },
+  { key: "weather", label: "Weather / visibility", patterns: /\brain(ing|y)?\b|\bfog(gy)?\b|\bmist\b|\bglare\b|\bpoor visibility\b/i, points: "conditions" },
 ];
 
 const norm = (s: string) => (s ?? "").replace(/\s+/g, " ").trim();
 
-function speedsIn(text: string): number[] {
-  const out: number[] = [];
-  for (const m of text.matchAll(/(\d{2,3})\s?(?:km\/?h|kph|kmph)\b/gi)) out.push(Number(m[1]));
-  return out;
+/** Sentence-ish split; committee transcripts use "Speaker:" turns as well. */
+function sentences(text: string): string[] {
+  return norm(text)
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
+
+const NEGATORS =
+  /\b(no|not|never|denied|denies|deny|without|neither|nor|nothing|sober|refut|dispute[sd]?|wasn'?t|weren'?t|didn'?t|hadn'?t|isn'?t|don'?t|doesn'?t)\b/i;
+
+/** A question asks about a factor; it does not assert it. */
+function isQuestion(s: string): boolean {
+  return (
+    s.includes("?") ||
+    /^\s*(committee|chair|question|q)\s*:/i.test(s) ||
+    /^\s*(were|was|did|do|does|have|has|had|is|are|any|would|could|can)\b/i.test(s)
+  );
+}
+
+type Stance = "asserted" | "denied" | "asked" | "absent";
+
+/** How an account treats one factor: asserted, denied, merely asked, or silent. */
+function stanceOn(text: string, f: Factor): { stance: Stance; quote?: string } {
+  const hits = sentences(text).filter((s) => f.patterns.test(s));
+  if (hits.length === 0) return { stance: "absent" };
+
+  let asked = false;
+  let denied: string | undefined;
+  for (const s of hits) {
+    if (NEGATORS.test(s)) { denied = s; continue; }
+    if (isQuestion(s)) { asked = true; continue; }
+    return { stance: "asserted", quote: s };     // a plain assertion settles it
+  }
+  if (denied) return { stance: "denied", quote: denied };
+  if (asked) return { stance: "asked" };
+  return { stance: "absent" };
+}
+
+const trim = (s: string, n = 150) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
 export function reviewAccident(input: ReviewInput): ReviewOutput {
   const driver = norm(input.driverStatement);
@@ -80,29 +123,43 @@ export function reviewAccident(input: ReviewInput): ReviewOutput {
   const images = norm(input.imageText ?? "");
   const hasCommittee = committee.length > 40;
 
-  const inDriver = new Set<string>();
-  const inCommittee = new Set<string>();
-  for (const f of FACTORS) {
-    if (f.patterns.test(driver)) inDriver.add(f.key);
-    if (hasCommittee && f.patterns.test(committee)) inCommittee.add(f.key);
-  }
+  const assertedDriver = new Set<string>();
+  const assertedCommittee = new Set<string>();
 
+  /** Genuine conflicts only. */
+  const conflicts: string[] = [];
+  /** Raised by one side and simply not covered by the other. Not a conflict. */
+  const oneSided: string[] = [];
+  /** Asked about and denied — worth recording, and the opposite of a finding. */
+  const cleared: string[] = [];
   const agreements: string[] = [];
-  const discrepancies: string[] = [];
-  const labelOf = (k: string) => FACTORS.find((f) => f.key === k)!.label;
 
   for (const f of FACTORS) {
-    const d = inDriver.has(f.key);
-    const c = inCommittee.has(f.key);
-    if (d && c) agreements.push(`Both accounts mention **${f.label.toLowerCase()}**.`);
-    else if (hasCommittee && d && !c) {
-      discrepancies.push(`The driver raises **${f.label.toLowerCase()}**, but the committee's report does not mention it.`);
-    } else if (hasCommittee && !d && c) {
-      discrepancies.push(`The committee's report raises **${f.label.toLowerCase()}**, which the driver's statement does not mention.`);
+    const d = stanceOn(driver, f);
+    const c = hasCommittee ? stanceOn(committee, f) : { stance: "absent" as Stance };
+    if (d.stance === "asserted") assertedDriver.add(f.key);
+    if (c.stance === "asserted") assertedCommittee.add(f.key);
+
+    const lower = f.label.toLowerCase();
+
+    if (d.stance === "asserted" && c.stance === "asserted") {
+      agreements.push(`Both accounts describe **${lower}**.`);
+    } else if (d.stance === "asserted" && c.stance === "denied") {
+      conflicts.push(`**${f.label}:** the driver describes it, the committee's report rules it out.`);
+    } else if (c.stance === "asserted" && d.stance === "denied") {
+      conflicts.push(`**${f.label}:** the committee's report describes it, the driver denies it.`);
+    } else if (c.stance === "denied" || d.stance === "denied") {
+      cleared.push(`**${lower}** was raised and explicitly ruled out — “${trim((c.quote ?? d.quote) ?? "")}”`);
+    } else if (c.stance === "asked" && d.stance !== "asserted") {
+      cleared.push(`**${lower}** was asked about; no one asserted it.`);
+    } else if (d.stance === "asserted" && c.stance === "absent" && hasCommittee) {
+      oneSided.push(`The driver describes **${lower}**; the committee's report does not cover it.`);
+    } else if (c.stance === "asserted" && d.stance === "absent") {
+      oneSided.push(`The committee's report describes **${lower}**; the driver's statement does not cover it.`);
     }
   }
 
-  // Blame direction: does each side point at the vehicle or at the driver?
+  // Direction of blame — only from what each side actually asserts.
   const dirOf = (set: Set<string>) => {
     const pts = FACTORS.filter((f) => set.has(f.key)).map((f) => f.points);
     return {
@@ -111,93 +168,93 @@ export function reviewAccident(input: ReviewInput): ReviewOutput {
       third: pts.filter((p) => p === "third_party").length,
     };
   };
-  const dd = dirOf(inDriver);
-  const cd = dirOf(inCommittee);
-
-  if (hasCommittee) {
-    const driverBlamesVehicleOrOther = dd.vehicle + dd.third > dd.driver;
-    const committeeBlamesDriver = cd.driver > cd.vehicle + cd.third;
-    if (driverBlamesVehicleOrOther && committeeBlamesDriver) {
-      discrepancies.push(
-        "**Direction of blame differs:** the driver attributes the accident to the vehicle or another party, while the committee's report leans towards driver conduct.",
-      );
-    }
+  const dd = dirOf(assertedDriver);
+  const cd = dirOf(assertedCommittee);
+  if (hasCommittee && dd.vehicle + dd.third > dd.driver && cd.driver > cd.vehicle + cd.third) {
+    conflicts.push(
+      "**Direction of blame differs:** the driver points at the vehicle or another party, the committee's report at driver conduct.",
+    );
   }
 
-  // Numeric claims.
+  // Speed figures, ignoring any sentence that denies speeding.
+  const speedsIn = (text: string) => {
+    const out: number[] = [];
+    for (const s of sentences(text)) {
+      if (NEGATORS.test(s)) continue;      // "well below 80 km/h" is not a claim of 80
+      for (const m of s.matchAll(/(\d{2,3})\s?(?:km\/?h|kph|kmph)\b/gi)) out.push(Number(m[1]));
+    }
+    return out;
+  };
   const ds = speedsIn(driver);
   const cs = speedsIn(committee);
   if (ds.length && cs.length) {
-    const maxD = Math.max(...ds);
-    const maxC = Math.max(...cs);
+    const maxD = Math.max(...ds), maxC = Math.max(...cs);
     if (Math.abs(maxD - maxC) >= 15) {
-      discrepancies.push(`**Speed stated differs:** driver ${maxD} km/h vs committee ${maxC} km/h.`);
+      conflicts.push(`**Speed stated differs:** driver ${maxD} km/h vs committee ${maxC} km/h.`);
     } else {
       agreements.push(`Stated speeds are close (${maxD} vs ${maxC} km/h).`);
     }
-  } else if (cs.length && !ds.length) {
-    discrepancies.push(`The committee cites a speed (${Math.max(...cs)} km/h); the driver's statement gives none.`);
   }
 
-  // Hard facts vs the narrative.
-  if (input.facts.otherParties && !inDriver.has("third_party") && !inCommittee.has("third_party")) {
-    discrepancies.push("The report is marked as involving other parties, but neither statement describes them.");
+  // Administrative gaps. Kept apart from conflicts — a missing form is not a
+  // disagreement between two accounts, and counting it as one used to push the
+  // verdict on its own.
+  const gaps: string[] = [];
+  if (input.facts.otherParties && !assertedDriver.has("third_party") && !assertedCommittee.has("third_party")) {
+    gaps.push("The report is marked as involving other parties, but neither statement describes them.");
   }
-  if (input.facts.injuries && !/injur|hurt|hospital|ambulance/i.test(driver + " " + committee)) {
-    discrepancies.push("Injuries were recorded, but neither statement describes them.");
+  if (input.facts.injuries && !/injur|hurt|hospital|ambulance/i.test(`${driver} ${committee}`)) {
+    gaps.push("Injuries were recorded, but neither statement describes them.");
   }
-  if (!input.facts.policeReport) {
-    discrepancies.push("No police report number is on file for this accident.");
-  }
-
+  if (!input.facts.policeReport) gaps.push("No police report number is on file.");
   if (images && /\b(police|report|case)\b/i.test(images)) {
-    agreements.push("Text read from the photos mentions a police/case reference.");
+    agreements.push("Text read from the photos mentions a police or case reference.");
   }
 
-  // Suggested verdict — intentionally cautious.
-  let verdict = "needs_more_info";
-  if (discrepancies.length === 0 && hasCommittee) {
-    verdict = dd.vehicle > dd.driver ? "not_driver_fault" : "inconclusive";
-  } else if (discrepancies.length >= 3) {
-    verdict = "needs_more_info";
-  } else if (hasCommittee && cd.driver > 0 && dd.vehicle > 0) {
-    verdict = "inconclusive";
-  }
+  // Verdict, driven by real conflicts only.
+  let verdict: string;
   if (!hasCommittee) verdict = "needs_more_info";
+  else if (conflicts.length === 0) {
+    verdict = dd.vehicle > dd.driver && cd.driver === 0 ? "not_driver_fault" : "inconclusive";
+  } else if (conflicts.length >= 2) verdict = "needs_more_info";
+  else verdict = "inconclusive";
 
-  const lines: string[] = [];
-  lines.push(
-    `Automated review — **keyword comparison, not a judgement.** Chitsano has no language model, so it compares which factors each account raises and flags gaps for the committee to confirm.`,
-  );
-  lines.push("");
-  lines.push(
+  const lines: string[] = [
+    "Automated review — **keyword comparison, not a judgement.** Chitsano has no language model. It reads which factors each account actually asserts, treats questions and denials as such, and flags the rest for the committee to confirm.",
+    "",
     `Evidence on file: ${input.counts.photos} photo(s), ${input.counts.videos} video(s), ${input.counts.audios} audio recording(s), ${input.counts.documents} document(s).`,
-  );
+  ];
   if (!hasCommittee) {
-    lines.push("");
-    lines.push(
-      "⚠️ No committee statement text was available to compare. Upload the committee's report as a .docx and press *Extract text*, then re-run this review.",
-    );
+    lines.push("", "⚠️ No committee statement text was available to compare. Upload the committee's report as a .docx and press *Extract text*, then re-run this review.");
   }
-  if (discrepancies.length) {
-    lines.push("");
-    lines.push(`🚩 **Discrepancies to check (${discrepancies.length})**`);
-    for (const d of discrepancies) lines.push(`• ${d}`);
+  if (conflicts.length) {
+    lines.push("", `🚩 **The accounts conflict (${conflicts.length})**`);
+    for (const d of conflicts) lines.push(`• ${d}`);
+  } else if (hasCommittee) {
+    lines.push("", "🚩 **No direct conflicts found** between the two accounts.");
+  }
+  if (oneSided.length) {
+    lines.push("", "📄 **Covered by one account only** — a gap in coverage, not a contradiction");
+    for (const o of oneSided) lines.push(`• ${o}`);
+  }
+  if (cleared.length) {
+    lines.push("", "✔️ **Asked about and ruled out**");
+    for (const c of cleared) lines.push(`• ${c}`);
   }
   if (agreements.length) {
-    lines.push("");
-    lines.push("✅ **Points of agreement**");
+    lines.push("", "✅ **Points of agreement**");
     for (const a of agreements) lines.push(`• ${a}`);
   }
-  lines.push("");
-  lines.push(
-    "🔇 **Not assessed:** Chitsano cannot watch the videos, listen to the recordings, or judge damage from the photos — those need a human, or a paid vision/speech service.",
-  );
+  if (gaps.length) {
+    lines.push("", "🗂️ **Missing from the file**");
+    for (const g of gaps) lines.push(`• ${g}`);
+  }
+  lines.push("", "🔇 **Not assessed:** Chitsano cannot watch the videos, listen to the recordings, or judge damage from the photos — those need a human, or a paid vision/speech service.");
 
   return {
     verdict,
-    confidence: discrepancies.length ? "low" : "medium",
+    confidence: conflicts.length ? "low" : "medium",
     comment: lines.join("\n"),
-    discrepancyCount: discrepancies.length,
+    discrepancyCount: conflicts.length,
   };
 }

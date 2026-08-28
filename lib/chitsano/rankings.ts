@@ -31,20 +31,34 @@ function board(title: string, rows: Tally[], unit: string, shape: Shape, empty: 
 
 /** Who signs in most, or least — from login_sessions, not last-seen. */
 export async function rankLogins(shape: Shape): Promise<string> {
-  const [{ rows: sessions }, { data: profiles }] = await Promise.all([
-    fetchAll<{ profile_id: string }>(() => app().from("login_sessions").select("profile_id").order("login_at")),
+  const [{ rows: sessions }, { data: profiles }, { data: drivers }] = await Promise.all([
+    fetchAll<{ profile_id: string; login_at: string }>(
+      () => app().from("login_sessions").select("profile_id, login_at").order("login_at")),
     app().from("profiles").select("id, full_name, role").eq("is_active", true)
       .returns<{ id: string; full_name: string | null; role: string }[]>(),
+    app().from("drivers").select("profile_id, employee_number")
+      .returns<{ profile_id: string; employee_number: string | null }[]>(),
   ]);
 
   const counts = new Map<string, number>();
   for (const s of sessions) counts.set(s.profile_id, (counts.get(s.profile_id) ?? 0) + 1);
+  const empOf = new Map((drivers ?? []).map((d) => [d.profile_id, d.employee_number]));
 
   const rows: Tally[] = (profiles ?? []).map((p) => ({
+    // Two people share the name "TENDAI MIKE MEDA" — one a driver account with
+    // no sign-ins, one an admin with several. Unqualified, the two answers read
+    // as the assistant contradicting itself.
     label: p.full_name ?? "Unnamed",
     value: counts.get(p.id) ?? 0,
-    extra: p.role.replaceAll("_", " "),
+    extra: [p.role.replaceAll("_", " "), empOf.get(p.id)].filter(Boolean).join(" · "),
   }));
+
+  // Sign-in tracking began part-way through the system's life, so these counts
+  // start from that date rather than from the beginning. Saying so is the
+  // difference between a fact and a misleading one.
+  const since = sessions[0]?.login_at
+    ? new Date(sessions[0].login_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : null;
 
   if (shape === "rank_bottom") {
     const never = rows.filter((r) => r.value === 0);
@@ -53,12 +67,14 @@ export async function rankLogins(shape: Shape): Promise<string> {
       return `${never.length} people have never signed in: ${names}${never.length > 10 ? `, and ${never.length - 10} more` : ""}.`;
     }
   }
-  return board(
+  const table = board(
     shape === "rank_bottom" ? "Signing in least:" : "Signing in most:",
     rows.filter((r) => shape === "rank_bottom" || r.value > 0),
     "sign-ins", shape,
     "Nobody has signed in yet.",
   );
+  return since ? `${table}
+(Counted since ${since}, when sign-in tracking started.)` : table;
 }
 
 /** Busiest vehicles, by distance actually recorded. */
