@@ -7,6 +7,7 @@ import { LiveLocationProvider } from "@/components/driver/LiveLocationProvider";
 import { LocationPermissionBanner } from "@/components/driver/LocationPermissionBanner";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { PushAlerts } from "@/components/pwa/PushAlerts";
+import { OfflineBar } from "@/components/pwa/OfflineBar";
 
 const GRADIENTS = [
   "from-orange-400 to-pink-500",
@@ -89,6 +90,7 @@ export default async function DriverLayout({ children }: { children: React.React
           gradient={gradientFor(profile.full_name)}
           greeting={greetingFor()}
         />
+      <OfflineBar />
         <LocationPermissionBanner />
         {/* Bottom padding clears the fixed nav (h-16) + safe area so content and
             submit buttons are never hidden behind the bottom navigation. */}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, LogOut, Phone, IdCard, X, ShieldCheck, UserPen, ChevronRight } from "lucide-react";
 import { signOut } from "@/actions/auth";
+import { flush, clearOutbox } from "@/lib/offline/outbox";
 import { Logo } from "@/components/brand/Logo";
 
 interface DriverHeaderProps {
@@ -43,6 +44,18 @@ export function DriverHeader({
 
   function handleSignOut() {
     startTransition(async () => {
+      // Anything still queued belongs to THIS driver, so send it before the
+      // session goes. Whatever cannot be sent is dropped rather than left to
+      // sync under whoever signs in next on a shared handset.
+      try {
+        await flush();
+        await clearOutbox();
+      } catch {
+        /* never block signing out */
+      }
+      // Wipe the driver's cached screens for the same reason.
+      navigator.serviceWorker?.controller?.postMessage({ type: "purge" });
+
       const result = await signOut();
       if (result && "redirectTo" in result) window.location.href = result.redirectTo;
     });

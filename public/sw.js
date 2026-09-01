@@ -4,14 +4,23 @@
 // fallback offline); cache-first for static assets. API/auth calls are never
 // cached. Keep this conservative — GPS sync has its own IndexedDB buffer.
 
-const CACHE = "prumac-v4";
+const CACHE = "prumac-v5";
 // A navigation that never resolves is why the app "sticks on load": on weak
 // mobile data fetch() has no timeout of its own, so the page waits forever
 // instead of falling back to the cached shell.
 const NAV_TIMEOUT_MS = 5000;
-// Only pages with no signed-in content are stored. Caching every page left one
-// driver's screens readable by the next person on a shared handset.
 const CACHEABLE_PAGES = new Set(["/offline", "/login"]);
+
+// A driver needs these to open with no signal — the whole point of queueing
+// work offline is being able to reach the form in the first place. They DO
+// contain signed-in content, so the cache is wiped on sign-out (see the
+// "purge" message below); without that, the next person on a shared handset
+// could read the last driver's screens.
+const DRIVER_PAGES = [
+  "/home", "/trip", "/checklist", "/handover", "/accident", "/fault",
+  "/profile", "/history", "/inspection",
+];
+const isDriverPage = (path) => DRIVER_PAGES.some((p) => path === p || path.startsWith(p + "/"));
 // NEVER precache "/" — it is a 307 to /login or /home, and a redirected
 // response cannot be served back for a navigation: the browser aborts the whole
 // load with ERR_FAILED, which is exactly how the app failed to open offline.
@@ -40,6 +49,20 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Sign-out clears every page holding a driver's data, so a shared handset
+// hands nothing to the next person.
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "purge") return;
+  event.waitUntil(
+    caches.open(CACHE).then(async (c) => {
+      for (const req of await c.keys()) {
+        const path = new URL(req.url).pathname;
+        if (isDriverPage(path)) await c.delete(req);
+      }
+    }).catch(() => {}),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -62,7 +85,7 @@ self.addEventListener("fetch", (event) => {
           ]);
           // A redirected response must never be cached or replayed: serving one
           // for a navigation throws and the page fails to load.
-          if (!res.redirected && res.ok && CACHEABLE_PAGES.has(url.pathname)) {
+          if (!res.redirected && res.ok && (CACHEABLE_PAGES.has(url.pathname) || isDriverPage(url.pathname))) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(url.pathname, copy)).catch(() => {});
           }
