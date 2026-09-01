@@ -122,9 +122,14 @@ export function NotificationBell({
         <>
           {/* On a phone the panel is nearly full-width, so a backdrop makes the
               "tap away to close" gesture discoverable. */}
-          <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-40 bg-ink-950/20 sm:hidden sm:bg-transparent" onClick={() => setOpen(false)} />
+          {/* On a phone the panel is pinned to the viewport, not to the bell.
+              Anchoring it to the bell pushed it off the left edge — the bell is
+              not the rightmost control, so a 22rem panel hanging from its right
+              edge started at a negative x and cut off its own heading. */}
           <div
-            className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white shadow-2xl overflow-hidden"
+            className="fixed inset-x-3 top-[4.5rem] z-50 rounded-2xl border border-ink-200 bg-white shadow-2xl overflow-hidden
+                       sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[22rem]"
             role="dialog"
             aria-label="Notifications"
           >
