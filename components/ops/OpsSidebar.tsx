@@ -1,4 +1,5 @@
-import { ChevronsUpDown } from "lucide-react";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import type { ProfileRow } from "@/types/domain";
 
@@ -27,7 +28,11 @@ export function OpsSidebar({ profile, children }: OpsSidebarProps) {
 
       {/* User chip */}
       <div className="relative border-t border-white/5 p-3">
-        <div className="flex items-center gap-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors px-3 py-2.5 cursor-pointer">
+        {/* This chip used to carry cursor-pointer, a hover state and an
+            up/down chevron — every signal of a menu — while being a plain div
+            with no handler. Admins now get a real destination; everyone else
+            gets an honest, static chip that does not pretend to be a button. */}
+        <ChipShell isAdmin={profile.role === "admin"}>
           <div className="h-9 w-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-sm font-bold shrink-0 ring-2 ring-white/10">
             {initial}
           </div>
@@ -39,9 +44,24 @@ export function OpsSidebar({ profile, children }: OpsSidebarProps) {
               {profile.role.replace("_", " ")}
             </p>
           </div>
-          <ChevronsUpDown className="h-4 w-4 text-slate-500" />
-        </div>
+          {profile.role === "admin" && <Settings className="h-4 w-4 text-slate-500" />}
+        </ChipShell>
       </div>
     </aside>
+  );
+}
+
+/**
+ * A link for the people who have somewhere to go, a plain block for those who
+ * do not — rather than a div that merely looks clickable.
+ */
+function ChipShell({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  const shared = "flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5";
+  return isAdmin ? (
+    <Link href="/settings" prefetch={false} className={`${shared} hover:bg-white/10 transition-colors`}>
+      {children}
+    </Link>
+  ) : (
+    <div className={shared}>{children}</div>
   );
 }

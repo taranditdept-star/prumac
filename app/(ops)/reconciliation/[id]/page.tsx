@@ -10,6 +10,7 @@ import { ReconciliationBadge } from "@/components/primitives/ReconciliationBadge
 import { TripStatusBadge } from "@/components/primitives/TripStatusBadge";
 import { GpsTrailMap } from "@/components/ops/GpsTrailMap";
 import { ReconcileButton } from "@/components/ops/ReconcileButton";
+import { ReconciliationDecision } from "@/components/ops/ReconciliationDecision";
 import type { CountryCode, ReconciliationStatus, TripStatus } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,9 @@ export default async function ReconciliationDetailPage({
   await requireRole("fleet_manager", "admin");
   const supabase = await createClient();
 
-  const [{ data: rec }, { data: trip }, { data: track }] = await Promise.all([
+  // The open reconciliation alert IS the outstanding item on this trip, so it
+  // decides whether the decision panel still needs a decision.
+  const [{ data: rec }, { data: trip }, { data: track }, { count: openAlerts }] = await Promise.all([
     supabase
       .schema("app")
       .from("reconciliations")
@@ -82,6 +85,13 @@ export default async function ReconciliationDetailPage({
       .eq("id", tripId)
       .maybeSingle<TripJoin>(),
     supabase.schema("app").rpc("fn_get_trip_track", { p_trip_id: tripId }),
+    supabase
+      .schema("app")
+      .from("alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("trip_id", tripId)
+      .like("kind", "reconciliation%")
+      .is("resolved_at", null),
   ]);
 
   if (!trip) notFound();
@@ -280,20 +290,7 @@ export default async function ReconciliationDetailPage({
         </p>
 
         {(rec?.status === "flagged" || rec?.status === "critical") && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              type="button"
-              className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors"
-            >
-              Accept as-is
-            </button>
-            <button
-              type="button"
-              className="h-11 rounded-xl bg-white border border-ink-200 hover:border-amber-300 hover:bg-amber-50 text-ink-900 text-sm font-semibold transition-all"
-            >
-              Adjust billing
-            </button>
-          </div>
+          <ReconciliationDecision tripId={tripId} hasOpenAlert={(openAlerts ?? 0) > 0} />
         )}
 
         {(rec?.status === "flagged" || rec?.status === "critical") && (

@@ -191,8 +191,11 @@ export function UserManagement({ accounts, subsidiaries }: { accounts: AccountRo
       )}
 
       {/* Account list */}
-      <div className="overflow-hidden rounded-2xl border border-ink-200/70 bg-white">
-        <table className="w-full text-sm">
+      {/* overflow-x-auto, not overflow-hidden: this table has six columns
+          including an Actions cell, and on a phone the last two were simply
+          cut off with no way to reach them. */}
+      <div className="overflow-x-auto rounded-2xl border border-ink-200/70 bg-white">
+        <table className="w-full min-w-[46rem] text-sm">
           <thead>
             <tr className="border-b border-ink-100 bg-ink-50/50 text-left text-[11px] uppercase tracking-wider text-ink-400">
               <th className="px-4 py-2.5 font-bold">Name</th>
