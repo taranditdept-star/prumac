@@ -1,19 +1,40 @@
 // PRUMAC Connect service worker.
-// Goals: make the app installable + resilient offline for the app shell.
-// Strategy: network-first for navigations (always fresh when online, cached
-// fallback offline); cache-first for static assets. API/auth calls are never
-// cached. Keep this conservative — GPS sync has its own IndexedDB buffer.
+//
+// Two caches, deliberately separate:
+//
+//   SHELL — versioned. Wiped whenever this file changes, because its contents
+//           belong to one build.
+//   PAGES — NOT versioned. The driver's own screens, saved so the app opens on
+//           the road. Wiping this on every deploy is what left drivers staring
+//           at "You're offline" with nothing behind it: three deploys in a day
+//           meant three times their saved pages were thrown away. It is cleared
+//           only on sign-out, so a shared handset hands nothing to the next
+//           person.
+//
+// Nothing here may wait forever. A request with no deadline is what left the
+// launch splash up for 45 minutes.
 
-const CACHE = "prumac-v6";
-// A navigation that never resolves is why the app "sticks on load": on weak
-// mobile data fetch() has no timeout of its own, so the page waits forever
-// instead of falling back to the cached shell.
+const SHELL = "prumac-shell-v7";
+const PAGES = "prumac-pages";
+
 const NAV_TIMEOUT_MS = 5000;
-// Assets had NO timeout. The page would arrive, then its JavaScript would hang
-// on weak signal and never resolve, so React never started and the launch
-// splash sat there — drivers reported up to 45 minutes. Nothing in this worker
-// may now wait forever.
 const ASSET_TIMEOUT_MS = 8000;
+const WARM_TIMEOUT_MS = 10000;
+
+const OFFLINE_URL = "/offline";
+// "/" is a 307 to /login or /home. A redirected response cannot be replayed for
+// a navigation — the browser aborts the load — so it is never precached.
+const APP_SHELL = [OFFLINE_URL, "/login", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
+
+// What a driver needs to reach with no signal. Warmed while they are online, so
+// offline availability does not depend on them having happened to visit first.
+const WARM_PAGES = ["/home", "/trip/start", "/checklist", "/fault/new", "/handover", "/profile"];
+
+const DRIVER_PAGES = [
+  "/home", "/trip", "/checklist", "/handover", "/accident", "/fault",
+  "/profile", "/history", "/inspection",
+];
+const isDriverPage = (path) => DRIVER_PAGES.some((p) => path === p || path.startsWith(p + "/"));
 
 /** fetch that gives up, instead of hanging until the driver does. */
 function fetchWithTimeout(request, ms) {
@@ -25,31 +46,11 @@ function fetchWithTimeout(request, ms) {
     );
   });
 }
-const CACHEABLE_PAGES = new Set(["/offline", "/login"]);
-
-// A driver needs these to open with no signal — the whole point of queueing
-// work offline is being able to reach the form in the first place. They DO
-// contain signed-in content, so the cache is wiped on sign-out (see the
-// "purge" message below); without that, the next person on a shared handset
-// could read the last driver's screens.
-const DRIVER_PAGES = [
-  "/home", "/trip", "/checklist", "/handover", "/accident", "/fault",
-  "/profile", "/history", "/inspection",
-];
-const isDriverPage = (path) => DRIVER_PAGES.some((p) => path === p || path.startsWith(p + "/"));
-// NEVER precache "/" — it is a 307 to /login or /home, and a redirected
-// response cannot be served back for a navigation: the browser aborts the whole
-// load with ERR_FAILED, which is exactly how the app failed to open offline.
-// /offline and /login are real pages that render without a redirect.
-const OFFLINE_URL = "/offline";
-const APP_SHELL = [OFFLINE_URL, "/login", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((c) =>
-      // One at a time: addAll rejects the whole batch if a single URL fails,
-      // which previously left the cache completely empty and the app with
-      // nothing to fall back on.
+    caches.open(SHELL).then((c) =>
+      // One at a time: addAll throws the whole batch away if a single URL fails.
       Promise.all(APP_SHELL.map((url) => c.add(url).catch(() => {}))),
     ),
   );
@@ -59,24 +60,41 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
+      // Old SHELL versions go; PAGES survives the deploy.
+      Promise.all(keys.filter((k) => k !== SHELL && k !== PAGES).map((k) => caches.delete(k))),
     ),
   );
   self.clients.claim();
 });
 
-// Sign-out clears every page holding a driver's data, so a shared handset
-// hands nothing to the next person.
+/**
+ * Saves the driver's screens while there is still signal.
+ *
+ * Called by the app after it loads. Without this, "available offline" only ever
+ * meant "available if you happened to open it online first" — which is not what
+ * a driver leaving the yard has done.
+ */
+async function warmPages() {
+  const cache = await caches.open(PAGES);
+  for (const path of WARM_PAGES) {
+    try {
+      const res = await fetchWithTimeout(new Request(path, { credentials: "same-origin" }), WARM_TIMEOUT_MS);
+      if (res.ok && !res.redirected) await cache.put(path, res.clone());
+    } catch {
+      /* no signal, or not this driver's page — skip it */
+    }
+  }
+}
+
 self.addEventListener("message", (event) => {
-  if (event.data?.type !== "purge") return;
-  event.waitUntil(
-    caches.open(CACHE).then(async (c) => {
-      for (const req of await c.keys()) {
-        const path = new URL(req.url).pathname;
-        if (isDriverPage(path)) await c.delete(req);
-      }
-    }).catch(() => {}),
-  );
+  if (event.data?.type === "warm") {
+    event.waitUntil(warmPages());
+    return;
+  }
+  // Sign-out: every page holding a driver's data goes.
+  if (event.data?.type === "purge") {
+    event.waitUntil(caches.delete(PAGES).catch(() => {}));
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -85,37 +103,27 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  // Never cache API, auth, or Next data/RSC requests — always go to network.
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
-        let timer;
         try {
-          const res = await Promise.race([
-            fetch(request),
-            new Promise((_, reject) => {
-              timer = setTimeout(() => reject(new Error("nav-timeout")), NAV_TIMEOUT_MS);
-            }),
-          ]);
-          // A redirected response must never be cached or replayed: serving one
-          // for a navigation throws and the page fails to load.
-          if (!res.redirected && res.ok && (CACHEABLE_PAGES.has(url.pathname) || isDriverPage(url.pathname))) {
+          const res = await fetchWithTimeout(request, NAV_TIMEOUT_MS);
+          if (!res.redirected && res.ok && isDriverPage(url.pathname)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(url.pathname, copy)).catch(() => {});
+            caches.open(PAGES).then((c) => c.put(url.pathname, copy)).catch(() => {});
           }
           return res;
         } catch (err) {
-          // Exact page first, then the offline page. Something always renders —
-          // the browser's own error screen is not an acceptable answer.
-          const exact = await caches.match(url.pathname);
-          if (exact) return exact;
-          const offline = await caches.match(OFFLINE_URL);
+          // The driver's own page first, then the shell, then the offline
+          // notice. Something always renders.
+          const saved = (await caches.match(url.pathname, { cacheName: PAGES }))
+            ?? (await caches.match(url.pathname, { cacheName: SHELL }));
+          if (saved) return saved;
+          const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL });
           if (offline) return offline;
           throw err;
-        } finally {
-          clearTimeout(timer);
         }
       })(),
     );
@@ -136,13 +144,12 @@ self.addEventListener("fetch", (event) => {
           const res = await fetchWithTimeout(request, ASSET_TIMEOUT_MS);
           if (res.ok) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+            caches.open(SHELL).then((c) => c.put(request, copy)).catch(() => {});
           }
           return res;
         } catch {
-          // Fail fast and let the page deal with it. A rejected script request
-          // raises an error the app can recover from; a pending one just leaves
-          // the driver looking at the splash screen.
+          // Fail fast: an error the page can recover from beats a request still
+          // pending an hour later.
           return new Response("", { status: 504, statusText: "asset timeout" });
         }
       })(),

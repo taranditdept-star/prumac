@@ -37,17 +37,29 @@ export default function OfflinePage() {
           location is still being recorded on this phone and will sync when the signal returns.
         </p>
 
-        {/* A plain reload: by the time this shows, the worker has already tried
-            the network and the cache. */}
+        {/* Goes to /home, not "/". "/" is a redirect, and offline a redirect
+            lands straight back here — the button looked broken because it was.
+            /home is one of the pages saved for offline use, so this is what
+            actually gets a driver into the app with no signal. */}
         <a
-          href="/"
+          href="/home"
           style={{
             display: "block", height: 52, lineHeight: "52px", borderRadius: 16,
             background: "#f97316", color: "#fff", fontSize: 16, fontWeight: 700,
             textDecoration: "none",
           }}
         >
-          Try again
+          Open the app
+        </a>
+        <a
+          href="/offline"
+          style={{
+            display: "block", height: 46, lineHeight: "46px", marginTop: 10,
+            borderRadius: 16, border: "1px solid rgba(255,255,255,.18)",
+            color: "#cbd5e1", fontSize: 15, fontWeight: 600, textDecoration: "none",
+          }}
+        >
+          Try the connection again
         </a>
 
         <p style={{ marginTop: 22, fontSize: 12, color: "#475569", lineHeight: 1.6 }}>
