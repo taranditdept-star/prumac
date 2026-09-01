@@ -4,11 +4,27 @@
 // fallback offline); cache-first for static assets. API/auth calls are never
 // cached. Keep this conservative — GPS sync has its own IndexedDB buffer.
 
-const CACHE = "prumac-v5";
+const CACHE = "prumac-v6";
 // A navigation that never resolves is why the app "sticks on load": on weak
 // mobile data fetch() has no timeout of its own, so the page waits forever
 // instead of falling back to the cached shell.
 const NAV_TIMEOUT_MS = 5000;
+// Assets had NO timeout. The page would arrive, then its JavaScript would hang
+// on weak signal and never resolve, so React never started and the launch
+// splash sat there — drivers reported up to 45 minutes. Nothing in this worker
+// may now wait forever.
+const ASSET_TIMEOUT_MS = 8000;
+
+/** fetch that gives up, instead of hanging until the driver does. */
+function fetchWithTimeout(request, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    fetch(request).then(
+      (res) => { clearTimeout(timer); resolve(res); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
 const CACHEABLE_PAGES = new Set(["/offline", "/login"]);
 
 // A driver needs these to open with no signal — the whole point of queueing
@@ -107,18 +123,29 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Next.js fingerprints these filenames, so a cache hit is always the right
-  // file and cache-first is safe. A miss goes to network and is stored.
-  if (request.destination === "image" || request.destination === "font" || request.destination === "style" || request.destination === "script") {
+  // file and cache-first is safe. A miss goes to network — with a deadline.
+  if (
+    request.destination === "image" || request.destination === "font" ||
+    request.destination === "style" || request.destination === "script"
+  ) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((res) => {
+      (async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        try {
+          const res = await fetchWithTimeout(request, ASSET_TIMEOUT_MS);
+          if (res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
-            return res;
-          }),
-      ),
+          }
+          return res;
+        } catch {
+          // Fail fast and let the page deal with it. A rejected script request
+          // raises an error the app can recover from; a pending one just leaves
+          // the driver looking at the splash screen.
+          return new Response("", { status: 504, statusText: "asset timeout" });
+        }
+      })(),
     );
   }
 });

@@ -23,6 +23,17 @@ const RELOAD_KEY = "prumac:last-recovery-reload";
 const RELOAD_COOLDOWN = 60_000;
 /** Generous: a cold start on 3G is slow, and a false reload costs the user their place. */
 const BOOT_TIMEOUT = 20_000;
+/**
+ * Last resort. A service worker that wedges is self-sealing: the fix ships
+ * inside the worker, but a driver stuck on the launch splash can never load the
+ * page that would replace it. Drivers reported sitting there for 45 minutes.
+ *
+ * So if the app has not become usable in this long, tear the worker out
+ * entirely, drop its caches and reload from the network. The app loses offline
+ * support until the worker reinstalls — which is a far better outcome than a
+ * phone that never opens the app at all.
+ */
+const UNSTICK_TIMEOUT = 25_000;
 
 const CHUNK_ERROR =
   /ChunkLoadError|Loading chunk [\d]+ failed|Importing a module script failed|error loading dynamically imported module/i;
@@ -41,6 +52,10 @@ function reloadOnce(reason: string) {
 
 export function StuckRecovery() {
   useEffect(() => {
+    // React is running, so the app booted: stand the inline watchdog down
+    // before it tears out a service worker that is working perfectly well.
+    (window as unknown as { __prumacCancelWatchdog?: () => void }).__prumacCancelWatchdog?.();
+
     // 1. A stale chunk after a deploy.
     const onError = (e: ErrorEvent) => {
       if (CHUNK_ERROR.test(e.message ?? "")) reloadOnce("stale chunk");
