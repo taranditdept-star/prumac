@@ -4,15 +4,30 @@
 // fallback offline); cache-first for static assets. API/auth calls are never
 // cached. Keep this conservative — GPS sync has its own IndexedDB buffer.
 
-const CACHE = "prumac-v3";
+const CACHE = "prumac-v4";
 // A navigation that never resolves is why the app "sticks on load": on weak
 // mobile data fetch() has no timeout of its own, so the page waits forever
 // instead of falling back to the cached shell.
 const NAV_TIMEOUT_MS = 5000;
-const APP_SHELL = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
+// Only pages with no signed-in content are stored. Caching every page left one
+// driver's screens readable by the next person on a shared handset.
+const CACHEABLE_PAGES = new Set(["/offline", "/login"]);
+// NEVER precache "/" — it is a 307 to /login or /home, and a redirected
+// response cannot be served back for a navigation: the browser aborts the whole
+// load with ERR_FAILED, which is exactly how the app failed to open offline.
+// /offline and /login are real pages that render without a redirect.
+const OFFLINE_URL = "/offline";
+const APP_SHELL = [OFFLINE_URL, "/login", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL)).catch(() => {}));
+  event.waitUntil(
+    caches.open(CACHE).then((c) =>
+      // One at a time: addAll rejects the whole batch if a single URL fails,
+      // which previously left the cache completely empty and the app with
+      // nothing to fall back on.
+      Promise.all(APP_SHELL.map((url) => c.add(url).catch(() => {}))),
+    ),
+  );
   self.skipWaiting();
 });
 
@@ -45,17 +60,20 @@ self.addEventListener("fetch", (event) => {
               timer = setTimeout(() => reject(new Error("nav-timeout")), NAV_TIMEOUT_MS);
             }),
           ]);
-          // Only the shell is cached. Caching every authenticated page would
-          // leave one driver's screens readable by the next person on a shared
-          // handset, and stale HTML can point at chunks a deploy has removed.
-          if (url.pathname === "/" && res.ok) {
+          // A redirected response must never be cached or replayed: serving one
+          // for a navigation throws and the page fails to load.
+          if (!res.redirected && res.ok && CACHEABLE_PAGES.has(url.pathname)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put("/", copy)).catch(() => {});
+            caches.open(CACHE).then((c) => c.put(url.pathname, copy)).catch(() => {});
           }
           return res;
         } catch (err) {
-          const cached = (await caches.match(request)) || (await caches.match("/"));
-          if (cached) return cached;
+          // Exact page first, then the offline page. Something always renders —
+          // the browser's own error screen is not an acceptable answer.
+          const exact = await caches.match(url.pathname);
+          if (exact) return exact;
+          const offline = await caches.match(OFFLINE_URL);
+          if (offline) return offline;
           throw err;
         } finally {
           clearTimeout(timer);
