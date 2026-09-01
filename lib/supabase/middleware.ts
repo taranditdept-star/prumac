@@ -47,6 +47,10 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     pathname.startsWith("/login") ||
     pathname.startsWith("/reset-password") ||
+    // The offline fallback must answer 200 to everyone. Redirecting it made it
+    // useless as a fallback: a redirected response cannot be replayed for a
+    // navigation, which is what left the app showing ERR_FAILED with no signal.
+    pathname.startsWith("/offline") ||
     pathname.startsWith("/api/health") ||
     // Cron routes authenticate themselves with CRON_SECRET (Bearer token from
     // Vercel Cron); they have no Supabase session, so skip the redirect.
