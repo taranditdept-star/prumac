@@ -33,11 +33,9 @@ export default function OfflinePage() {
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 10px" }}>You&rsquo;re offline</h1>
-        <p style={{ fontSize: 14, lineHeight: 1.6, color: "#94a3b8", margin: "0 0 24px" }}>
-          PRUMAC Connect needs a connection to load your trips, checklists and messages. Your
-          location is still being recorded on this phone and will sync when the signal returns.
-        </p>
 
+        {/* The explanation belongs with the buttons: what to say depends on
+            whether this phone has anything saved, which only the client knows. */}
         <OfflineActions />
 
         <p style={{ marginTop: 22, fontSize: 12, color: "#475569", lineHeight: 1.6 }}>

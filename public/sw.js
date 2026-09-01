@@ -1,40 +1,54 @@
 // PRUMAC Connect service worker.
 //
-// Two caches, deliberately separate:
+// Three caches, deliberately separate:
 //
-//   SHELL — versioned. Wiped whenever this file changes, because its contents
-//           belong to one build.
-//   PAGES — NOT versioned. The driver's own screens, saved so the app opens on
-//           the road. Wiping this on every deploy is what left drivers staring
-//           at "You're offline" with nothing behind it: three deploys in a day
-//           meant three times their saved pages were thrown away. It is cleared
-//           only on sign-out, so a shared handset hands nothing to the next
-//           person.
+//   SHELL  — versioned. The handful of files that are NOT content-hashed
+//            (/offline, /login, the manifest, the icons). Wiped per build.
+//   ASSETS — NOT versioned. Everything under /_next/static, whose filenames
+//            contain a content hash: a cache hit is always the right bytes, so
+//            keeping the previous build's files costs storage and nothing else.
+//            Wiping these per deploy is what left a saved page rendering "The
+//            app didn't load" — the HTML was there, its scripts were not.
+//   PAGES  — NOT versioned. The driver's own screens. Cleared only on sign-out,
+//            so a shared handset hands nothing to the next person.
 //
 // Nothing here may wait forever. A request with no deadline is what left the
 // launch splash up for 45 minutes.
 
-const SHELL = "prumac-shell-v7";
+const SHELL = "prumac-shell-v8";
+const ASSETS = "prumac-assets";
 const PAGES = "prumac-pages";
+const KEEP = [SHELL, ASSETS, PAGES];
 
 const NAV_TIMEOUT_MS = 5000;
 const ASSET_TIMEOUT_MS = 8000;
-const WARM_TIMEOUT_MS = 10000;
+const WARM_TIMEOUT_MS = 8000;
+/** Total time one warm run may take, so it never outlives the worker. */
+const WARM_BUDGET_MS = 45000;
+const WARM_MARKER = "/__prumac-warm";
+const WARM_MAX_AGE_MS = 30 * 60 * 1000;
+const MAX_WARM_PAGES = 16;
+/** Roughly two builds' worth of chunks. Old ones are pruned oldest-first. */
+const ASSET_LIMIT = 700;
 
 const OFFLINE_URL = "/offline";
 // "/" is a 307 to /login or /home. A redirected response cannot be replayed for
 // a navigation — the browser aborts the load — so it is never precached.
 const APP_SHELL = [OFFLINE_URL, "/login", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
-// What a driver needs to reach with no signal. Warmed while they are online, so
-// offline availability does not depend on them having happened to visit first.
-const WARM_PAGES = ["/home", "/trip/start", "/checklist", "/fault/new", "/handover", "/profile"];
+// The floor: what every driver needs whether or not their home screen links to
+// it. Anything their own home screen DOES link to is added on top, at warm time.
+const WARM_PAGES = [
+  "/home", "/checklist", "/trip/start", "/handover", "/handover/new",
+  "/accident/new", "/fault/new", "/history", "/profile",
+];
 
 const DRIVER_PAGES = [
   "/home", "/trip", "/checklist", "/handover", "/accident", "/fault",
-  "/profile", "/history", "/inspection",
+  "/profile", "/history", "/inspection", "/leave", "/repair", "/scorecard",
 ];
 const isDriverPage = (path) => DRIVER_PAGES.some((p) => path === p || path.startsWith(p + "/"));
+const isHashed = (path) => path.startsWith("/_next/static/");
 
 /** fetch that gives up, instead of hanging until the driver does. */
 function fetchWithTimeout(request, ms) {
@@ -47,55 +61,144 @@ function fetchWithTimeout(request, ms) {
   });
 }
 
+const page = (path) => new Request(path, { credentials: "same-origin" });
+
+/** Never store a redirect or an error under a URL we will serve back. */
+async function putIfUsable(cache, key, res) {
+  if (res && res.ok && !res.redirected) await cache.put(key, res);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL).then((c) =>
-      // One at a time: addAll throws the whole batch away if a single URL fails.
-      Promise.all(APP_SHELL.map((url) => c.add(url).catch(() => {}))),
-    ),
+    (async () => {
+      const c = await caches.open(SHELL);
+      // Not cache.addAll: it throws the whole batch away if one URL fails, and
+      // it happily stores a redirect — /login is a 307 to /home once you are
+      // signed in, and a stored redirect cannot be replayed for a navigation.
+      await Promise.all(APP_SHELL.map(async (url) => {
+        try { await putIfUsable(c, url, await fetchWithTimeout(page(url), WARM_TIMEOUT_MS)); } catch { /* offline install */ }
+      }));
+    })(),
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      // Old SHELL versions go; PAGES survives the deploy.
-      Promise.all(keys.filter((k) => k !== SHELL && k !== PAGES).map((k) => caches.delete(k))),
-    ),
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
+      // Hashed assets accumulate across builds. Cache.keys() is insertion
+      // ordered, so the oldest entries are the ones to drop.
+      const assets = await caches.open(ASSETS);
+      const entries = await assets.keys();
+      if (entries.length > ASSET_LIMIT) {
+        await Promise.all(entries.slice(0, entries.length - ASSET_LIMIT).map((r) => assets.delete(r)));
+      }
+    })(),
   );
   self.clients.claim();
 });
 
-/**
- * Saves the driver's screens while there is still signal.
- *
- * Called by the app after it loads. Without this, "available offline" only ever
- * meant "available if you happened to open it online first" — which is not what
- * a driver leaving the yard has done.
- */
-async function warmPages() {
-  const cache = await caches.open(PAGES);
-  for (const path of WARM_PAGES) {
-    try {
-      const res = await fetchWithTimeout(new Request(path, { credentials: "same-origin" }), WARM_TIMEOUT_MS);
-      if (res.ok && !res.redirected) await cache.put(path, res.clone());
-    } catch {
-      /* no signal, or not this driver's page — skip it */
-    }
+// ── Warming ──────────────────────────────────────────────────────────────────
+//
+// Caching only what the driver happened to open meant "available offline" was
+// really "available if you opened it online first" — and a driver leaving the
+// yard has not.
+
+/** Every /_next/static file the server-rendered HTML asks for. */
+function staticUrls(html) {
+  const out = new Set();
+  const re = /["'(](\/_next\/static\/[^"'()\s\\]+)/g;
+  let m;
+  while ((m = re.exec(html))) out.add(m[1]);
+  return [...out];
+}
+
+/** Driver screens this page links to — their active trip, their vehicle. */
+function driverLinks(html) {
+  const out = new Set();
+  const re = /href="(\/[^"#?]*)"/g;
+  let m;
+  while ((m = re.exec(html))) if (isDriverPage(m[1])) out.add(m[1]);
+  return [...out];
+}
+
+async function saveAssets(cache, html) {
+  await Promise.all(staticUrls(html).map(async (url) => {
+    if (await cache.match(url)) return; // content-hashed: already the right file
+    try { await putIfUsable(cache, url, await fetchWithTimeout(page(url), ASSET_TIMEOUT_MS)); } catch { /* skip */ }
+  }));
+}
+
+async function needsWarm() {
+  try {
+    const marker = await caches.match(WARM_MARKER, { cacheName: PAGES });
+    if (!marker) return true;
+    const { shell, at } = await marker.json();
+    return shell !== SHELL || Date.now() - at > WARM_MAX_AGE_MS;
+  } catch {
+    return true;
   }
 }
 
+async function warmPages(extra = []) {
+  const pages = await caches.open(PAGES);
+  const assets = await caches.open(ASSETS);
+  const queue = ["/home", ...WARM_PAGES, ...extra.filter((p) => typeof p === "string" && isDriverPage(p))];
+  const done = new Set();
+  const deadline = Date.now() + WARM_BUDGET_MS;
+  let expanded = false;
+
+  for (let i = 0; i < queue.length && done.size < MAX_WARM_PAGES; i++) {
+    const path = queue[i];
+    if (done.has(path)) continue;
+    done.add(path);
+    if (Date.now() > deadline) break;
+    try {
+      const res = await fetchWithTimeout(page(path), WARM_TIMEOUT_MS);
+      if (!res.ok || res.redirected) continue; // not this driver's page
+      const html = await res.clone().text();
+      // Scripts BEFORE the page. A saved page whose chunks are missing renders
+      // "The app didn't load" — strictly worse than not saving it at all.
+      await saveAssets(assets, html);
+      await pages.put(path, res);
+      if (!expanded && path === "/home") {
+        expanded = true;
+        for (const link of driverLinks(html)) if (!queue.includes(link)) queue.push(link);
+      }
+    } catch {
+      /* no signal, or not a page this driver can open */
+    }
+  }
+  await pages.put(WARM_MARKER, new Response(JSON.stringify({ shell: SHELL, at: Date.now() }),
+    { headers: { "content-type": "application/json" } }));
+}
+
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "warm") {
-    event.waitUntil(warmPages());
+  const data = event.data ?? {};
+  if (data.type === "warm") {
+    event.waitUntil((async () => {
+      if (data.force || (await needsWarm())) await warmPages(data.paths ?? []);
+    })());
     return;
   }
-  // Sign-out: every page holding a driver's data goes.
-  if (event.data?.type === "purge") {
+  // Sign-out: every page holding a driver's data goes. Assets are impersonal
+  // and stay, so the next person's app still opens instantly.
+  if (data.type === "purge") {
     event.waitUntil(caches.delete(PAGES).catch(() => {}));
   }
 });
+
+// ── Fetch ────────────────────────────────────────────────────────────────────
+
+/**
+ * When the network last let us down. Inside the window below we serve the saved
+ * page immediately instead of making the driver watch a five-second timeout on
+ * every single tap, and re-check in the background.
+ */
+let lastFailureAt = 0;
+const OFFLINE_WINDOW_MS = 15000;
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -106,21 +209,43 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth")) return;
 
   if (request.mode === "navigate") {
+    const path = url.pathname;
+    const saved = () => caches.match(path, { cacheName: PAGES });
+
+    const revalidate = async () => {
+      try {
+        const res = await fetchWithTimeout(request, NAV_TIMEOUT_MS);
+        lastFailureAt = 0;
+        if (res.ok && !res.redirected && isDriverPage(path)) {
+          await (await caches.open(PAGES)).put(path, res);
+        }
+      } catch {
+        lastFailureAt = Date.now();
+      }
+    };
+
     event.respondWith(
       (async () => {
+        const probablyOffline =
+          self.navigator.onLine === false || Date.now() - lastFailureAt < OFFLINE_WINDOW_MS;
+        if (probablyOffline) {
+          const hit = await saved();
+          if (hit) { event.waitUntil(revalidate()); return hit; }
+        }
         try {
           const res = await fetchWithTimeout(request, NAV_TIMEOUT_MS);
-          if (!res.redirected && res.ok && isDriverPage(url.pathname)) {
+          lastFailureAt = 0;
+          if (res.ok && !res.redirected && isDriverPage(path)) {
             const copy = res.clone();
-            caches.open(PAGES).then((c) => c.put(url.pathname, copy)).catch(() => {});
+            caches.open(PAGES).then((c) => c.put(path, copy)).catch(() => {});
           }
           return res;
         } catch (err) {
+          lastFailureAt = Date.now();
           // The driver's own page first, then the shell, then the offline
           // notice. Something always renders.
-          const saved = (await caches.match(url.pathname, { cacheName: PAGES }))
-            ?? (await caches.match(url.pathname, { cacheName: SHELL }));
-          if (saved) return saved;
+          const hit = (await saved()) ?? (await caches.match(path, { cacheName: SHELL }));
+          if (hit) return hit;
           const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL });
           if (offline) return offline;
           throw err;
@@ -142,9 +267,10 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
         try {
           const res = await fetchWithTimeout(request, ASSET_TIMEOUT_MS);
-          if (res.ok) {
+          if (res.ok && !res.redirected) {
             const copy = res.clone();
-            caches.open(SHELL).then((c) => c.put(request, copy)).catch(() => {});
+            caches.open(isHashed(url.pathname) ? ASSETS : SHELL)
+              .then((c) => c.put(request, copy)).catch(() => {});
           }
           return res;
         } catch {

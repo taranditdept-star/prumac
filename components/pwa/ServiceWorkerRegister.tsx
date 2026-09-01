@@ -24,13 +24,17 @@ export function ServiceWorkerRegister() {
      * Caching only what the driver happened to open meant "available offline"
      * was really "available if you opened it online first" — and a driver
      * leaving the yard has not. Warming is repeated on focus because a deploy
-     * or a sign-in changes what should be stored.
+     * or a sign-in changes what should be stored; the worker itself decides
+     * whether enough has changed to be worth the data.
+     *
+     * The current path goes along for the ride: a driver sitting on their
+     * active trip screen when the signal dies should keep that screen.
      */
     const warm = async () => {
       if (!navigator.onLine) return;
       const active = (await navigator.serviceWorker.ready.catch(() => null))?.active
         ?? navigator.serviceWorker.controller;
-      active?.postMessage({ type: "warm" });
+      active?.postMessage({ type: "warm", paths: [window.location.pathname] });
     };
 
     const register = () => {
