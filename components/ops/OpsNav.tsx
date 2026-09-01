@@ -103,8 +103,13 @@ interface NavLinkProps {
 
 function NavLink({ href, label, icon: Icon, active }: NavLinkProps) {
   return (
+    // Not prefetched. Thirty-two nav links each firing a full server render of
+    // a page nobody has opened is what made a click on the admin side take
+    // seconds — they queue ahead of the navigation actually wanted. One cold
+    // click costs about 700ms, which is far cheaper than the storm.
     <Link
       href={href}
+      prefetch={false}
       className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
         active
           ? "bg-gradient-to-r from-orange-500/15 to-orange-500/5 text-white"

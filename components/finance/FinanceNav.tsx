@@ -28,7 +28,7 @@ const SETUP = [
 
 function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; active: boolean; }) {
   return (
-    <Link href={href} className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${active ? "bg-gradient-to-r from-orange-500/15 to-orange-500/5 text-white" : "text-slate-400 hover:text-white hover:bg-white/5"}`}>
+    <Link href={href} prefetch={false} className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${active ? "bg-gradient-to-r from-orange-500/15 to-orange-500/5 text-white" : "text-slate-400 hover:text-white hover:bg-white/5"}`}>
       {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-orange-500" />}
       <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-orange-400" : ""}`} strokeWidth={active ? 2.5 : 2} />
       <span>{label}</span>
@@ -53,7 +53,7 @@ export function FinanceNav({ role: _role }: { role: AppRole }) {
   return (
     <div className="flex flex-col gap-1 px-3">
       <div className="mb-4">
-        <Link href="/live" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+        <Link href="/live" prefetch={false} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all">
           <ArrowLeft className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
           <span>Back to operations</span>
         </Link>
