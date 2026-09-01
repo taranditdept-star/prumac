@@ -15,7 +15,7 @@
 // Nothing here may wait forever. A request with no deadline is what left the
 // launch splash up for 45 minutes.
 
-const SHELL = "prumac-shell-v8";
+const SHELL = "prumac-shell-v9";
 const ASSETS = "prumac-assets";
 const PAGES = "prumac-pages";
 const KEEP = [SHELL, ASSETS, PAGES];
@@ -72,11 +72,20 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const c = await caches.open(SHELL);
+      const assets = await caches.open(ASSETS);
       // Not cache.addAll: it throws the whole batch away if one URL fails, and
       // it happily stores a redirect — /login is a 307 to /home once you are
       // signed in, and a stored redirect cannot be replayed for a navigation.
       await Promise.all(APP_SHELL.map(async (url) => {
-        try { await putIfUsable(c, url, await fetchWithTimeout(page(url), WARM_TIMEOUT_MS)); } catch { /* offline install */ }
+        try {
+          const res = await fetchWithTimeout(page(url), WARM_TIMEOUT_MS);
+          if (!res.ok || res.redirected) return;
+          // These two carry the root layout and framework chunks that every
+          // other page shares, so caching their scripts here is what makes a
+          // cold offline start possible at all.
+          if (url === OFFLINE_URL || url === "/login") await saveAssets(assets, await res.clone().text());
+          await c.put(url, res);
+        } catch { /* offline install */ }
       }));
     })(),
   );
@@ -212,6 +221,19 @@ self.addEventListener("fetch", (event) => {
     const path = url.pathname;
     const saved = () => caches.match(path, { cacheName: PAGES });
 
+    /**
+     * The installed icon opens "/", and "/" is a server redirect to /home or
+     * /login. It can never be cached — a stored redirect cannot be replayed for
+     * a navigation — so with no signal it fell through to the offline notice.
+     * That is the launch that matters most: tapping the icon on the home
+     * screen. Send it to the saved home screen instead.
+     */
+    const homeInstead = async () => {
+      if (path !== "/") return null;
+      const home = await caches.match("/home", { cacheName: PAGES });
+      return home ? Response.redirect(new URL("/home", self.location.origin).href, 302) : null;
+    };
+
     const revalidate = async () => {
       try {
         const res = await fetchWithTimeout(request, NAV_TIMEOUT_MS);
@@ -229,7 +251,7 @@ self.addEventListener("fetch", (event) => {
         const probablyOffline =
           self.navigator.onLine === false || Date.now() - lastFailureAt < OFFLINE_WINDOW_MS;
         if (probablyOffline) {
-          const hit = await saved();
+          const hit = (await saved()) ?? (await homeInstead());
           if (hit) { event.waitUntil(revalidate()); return hit; }
         }
         try {
@@ -242,9 +264,11 @@ self.addEventListener("fetch", (event) => {
           return res;
         } catch (err) {
           lastFailureAt = Date.now();
-          // The driver's own page first, then the shell, then the offline
-          // notice. Something always renders.
-          const hit = (await saved()) ?? (await caches.match(path, { cacheName: SHELL }));
+          // The driver's own page first, then their home screen, then the
+          // shell, then the offline notice. Something always renders.
+          const hit = (await saved())
+            ?? (await homeInstead())
+            ?? (await caches.match(path, { cacheName: SHELL }));
           if (hit) return hit;
           const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL });
           if (offline) return offline;
