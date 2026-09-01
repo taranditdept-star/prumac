@@ -333,7 +333,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           />
 
           {rec && (
-            <Link
+            <Link prefetch={false}
               href={`/reconciliation/${trip.id}`}
               className="block rounded-2xl bg-white border border-ink-200/70 p-5 hover:border-orange-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all"
             >

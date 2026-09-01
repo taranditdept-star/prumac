@@ -191,7 +191,7 @@ export default async function InvoicesPage() {
               {list.map((inv) => (
                 <tr key={inv.id} className="hover:bg-ink-50/40 transition-colors group">
                   <td className="px-6 py-4">
-                    <Link href={`/invoices/${inv.id}`} className="block">
+                    <Link prefetch={false} href={`/invoices/${inv.id}`} className="block">
                       <p className="font-plate font-semibold text-ink-900 text-xs">{inv.invoice_number}</p>
                       {inv.issued_at && (
                         <p className="text-[10px] uppercase tracking-wider text-ink-400 font-bold mt-0.5">
@@ -218,7 +218,7 @@ export default async function InvoicesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link
+                    <Link prefetch={false}
                       href={`/invoices/${inv.id}`}
                       className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                     >

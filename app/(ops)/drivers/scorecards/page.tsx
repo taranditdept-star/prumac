@@ -95,7 +95,7 @@ export default async function ScorecardsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <Link href={`/drivers/${r.driver_id}`} className="flex items-center gap-3 group">
+                    <Link prefetch={false} href={`/drivers/${r.driver_id}`} className="flex items-center gap-3 group">
                       <span className="h-9 w-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-white shrink-0">
                         {initials(r.full_name)}
                       </span>

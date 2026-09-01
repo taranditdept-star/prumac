@@ -138,7 +138,7 @@ export default async function DispatchPage() {
                   )}
                   {items.map((j) => (
                     <li key={j.id}>
-                      <Link href={`/dispatch/${j.id}`} className="block px-3.5 py-3 hover:bg-ink-50/60">
+                      <Link prefetch={false} href={`/dispatch/${j.id}`} className="block px-3.5 py-3 hover:bg-ink-50/60">
                         <div className="flex items-center gap-2">
                           <span className="font-plate text-[11px] font-bold text-ink-500">{j.reference}</span>
                           {j.is_urgent && (

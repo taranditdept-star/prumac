@@ -310,7 +310,7 @@ export default async function TripsPage({
                   <tr key={t.id} className="hover:bg-ink-50/40 transition-colors group">
                     <td className="px-6 py-4"><TripStatusBadge status={t.status} /></td>
                     <td className="px-6 py-4">
-                      <Link href={`/trips/${t.id}`} className="block">
+                      <Link prefetch={false} href={`/trips/${t.id}`} className="block">
                         {t.vehicles && (
                           <PlateBadge plate={t.vehicles.plate_number} country={t.vehicles.plate_country} size="sm" />
                         )}
@@ -341,7 +341,7 @@ export default async function TripsPage({
                     <td className="px-6 py-4"><span className="text-xs text-ink-500">{fmtStarted(t.started_at)}</span></td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        <Link
+                        <Link prefetch={false}
                           href={`/trips/${t.id}`}
                           aria-label="Open trip"
                           className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"

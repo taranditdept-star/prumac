@@ -118,7 +118,7 @@ export default async function DriverChecklistPage({
         </header>
         <div className="space-y-2">
           {vehicles.map((v) => (
-            <Link
+            <Link prefetch={false}
               key={v.id}
               href={`/checklist?vehicle=${v.id}`}
               className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-ink-200/70 hover:border-orange-200 active:scale-[0.99] transition-all"

@@ -118,7 +118,7 @@ export default async function InspectionDetailPage({ params }: { params: Promise
               <Gauge className="h-3.5 w-3.5 text-slate-400" /> {insp.odometer_km.toLocaleString()} km
             </span>
             {insp.trip_id && (
-              <Link href={`/trips/${insp.trip_id}`} className="inline-flex items-center gap-1.5 text-orange-300 hover:text-orange-200">
+              <Link prefetch={false} href={`/trips/${insp.trip_id}`} className="inline-flex items-center gap-1.5 text-orange-300 hover:text-orange-200">
                 View trip →
               </Link>
             )}
@@ -190,7 +190,7 @@ export default async function InspectionDetailPage({ params }: { params: Promise
               <ul className="space-y-2">
                 {(faults ?? []).map((f) => (
                   <li key={f.id}>
-                    <Link
+                    <Link prefetch={false}
                       href={`/faults/${f.id}`}
                       className="flex items-center gap-2 rounded-xl border border-ink-200/70 p-2.5 hover:bg-ink-50/60 transition-colors"
                     >

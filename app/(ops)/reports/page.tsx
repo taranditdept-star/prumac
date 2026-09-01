@@ -273,7 +273,7 @@ export default async function ReportsPage() {
             {subsidiaries.map((s) => (
               <tr key={s.subsidiary_id} className="hover:bg-ink-50/40 transition-colors group">
                 <td className="px-6 py-3.5">
-                  <Link
+                  <Link prefetch={false}
                     href={`/subsidiaries/${s.subsidiary_id}`}
                     className="font-semibold text-ink-900 hover:text-orange-600 transition-colors"
                   >
@@ -298,7 +298,7 @@ export default async function ReportsPage() {
                   </span>
                 </td>
                 <td className="px-6 py-3.5 text-right">
-                  <Link
+                  <Link prefetch={false}
                     href={`/subsidiaries/${s.subsidiary_id}`}
                     className="inline-flex h-7 w-7 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                   >

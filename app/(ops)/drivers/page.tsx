@@ -255,7 +255,7 @@ export default async function DriversPage({
                 key={d.id}
                 className="group relative rounded-2xl bg-white border border-ink-200/70 p-5 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-200"
               >
-                <Link
+                <Link prefetch={false}
                   href={`/drivers/${d.id}`}
                   aria-label={`Open ${name}`}
                   className="absolute inset-0 z-10 rounded-2xl"

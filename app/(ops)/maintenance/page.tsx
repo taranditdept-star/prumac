@@ -225,7 +225,7 @@ export default async function MaintenancePage({
                   </td>
                   <td className="px-6 py-4">
                     {r.vehicles && (
-                      <Link href={`/vehicles`} className="block">
+                      <Link prefetch={false} href={`/vehicles`} className="block">
                         <PlateBadge plate={r.vehicles.plate_number} country={r.vehicles.plate_country} size="sm" />
                         <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
                           {r.vehicles.make} {r.vehicles.model}

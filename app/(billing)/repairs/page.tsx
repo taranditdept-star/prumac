@@ -118,7 +118,7 @@ export default async function RepairsPage() {
                   <td className="px-6 py-4"><StatusPill status={c.status} /></td>
                   <td className="px-6 py-4">
                     {c.vehicles && (
-                      <Link href={`/repairs/${c.id}`} className="block">
+                      <Link prefetch={false} href={`/repairs/${c.id}`} className="block">
                         <PlateBadge plate={c.vehicles.plate_number} country={c.vehicles.plate_country} size="sm" />
                         <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
                           {c.vehicles.make} {c.vehicles.model}
@@ -135,7 +135,7 @@ export default async function RepairsPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{fmt(c.created_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link
+                    <Link prefetch={false}
                       href={`/repairs/${c.id}`}
                       className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                     >

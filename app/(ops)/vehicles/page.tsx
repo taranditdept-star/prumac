@@ -268,7 +268,7 @@ export default async function VehiclesPage({
                     className="hover:bg-ink-50/40 transition-colors group cursor-pointer"
                   >
                     <td className="px-6 py-4">
-                      <Link href={`/vehicles/${v.id}`} className="flex items-center gap-3">
+                      <Link prefetch={false} href={`/vehicles/${v.id}`} className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-ink-100 to-ink-200/80 flex items-center justify-center text-lg shrink-0">
                           {classIcon[v.class] ?? "🚗"}
                         </div>
@@ -284,7 +284,7 @@ export default async function VehiclesPage({
                       </Link>
                     </td>
                     <td className="px-6 py-4">
-                      <Link href={`/vehicles/${v.id}`}>
+                      <Link prefetch={false} href={`/vehicles/${v.id}`}>
                         <PlateBadge plate={v.plate_number} country={v.plate_country} />
                       </Link>
                     </td>
@@ -319,7 +319,7 @@ export default async function VehiclesPage({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        <Link
+                        <Link prefetch={false}
                           href={`/vehicles/${v.id}`}
                           aria-label="Open vehicle"
                           className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"

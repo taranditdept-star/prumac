@@ -134,7 +134,7 @@ export default async function ReconciliationPage() {
                     </td>
                     <td className="px-6 py-4">
                       {t?.vehicles ? (
-                        <Link href={`/reconciliation/${r.trip_id}`} className="block">
+                        <Link prefetch={false} href={`/reconciliation/${r.trip_id}`} className="block">
                           <PlateBadge
                             plate={t.vehicles.plate_number}
                             country={t.vehicles.plate_country}
@@ -186,7 +186,7 @@ export default async function ReconciliationPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link
+                      <Link prefetch={false}
                         href={`/reconciliation/${r.trip_id}`}
                         className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                       >

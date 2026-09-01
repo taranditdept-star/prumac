@@ -78,7 +78,7 @@ export default async function LifecyclePage() {
                 return (
                   <tr key={r.vehicle_id} className="hover:bg-ink-50/40 transition-colors">
                     <td className="px-6 py-4">
-                      <Link href={`/vehicles/${r.vehicle_id}`} className="block">
+                      <Link prefetch={false} href={`/vehicles/${r.vehicle_id}`} className="block">
                         <PlateBadge plate={r.plate_number} country={r.plate_country} size="sm" />
                         <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">
                           {r.make} {r.model}

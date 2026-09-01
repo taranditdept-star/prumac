@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
+import { getMyDriver } from "@/lib/auth/driver";
 import { myProfileSchema } from "@/lib/validation/myProfile";
 import { normalisePhone } from "@/lib/utils/phone";
 
@@ -21,7 +22,12 @@ const nullIfBlank = (v: FormDataEntryValue | null) => {
  * caller's own rows, and no driver id is accepted from the client.
  */
 export async function updateMyDriverProfile(formData: FormData): Promise<MyProfileResult> {
-  await requireRole("driver");
+  const profile = await requireAuth();
+  // Gated on having a driver record rather than on role: a manager or
+  // administrator who drives keeps their own licence current too.
+  if (!(await getMyDriver(profile.id))) {
+    return { error: "You do not have a driver record to update." };
+  }
 
   const parsed = myProfileSchema.safeParse({
     full_name: formData.get("full_name"),

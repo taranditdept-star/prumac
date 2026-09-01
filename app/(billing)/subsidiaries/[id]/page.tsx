@@ -178,7 +178,7 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
                   <span className="flex-1 text-sm font-medium text-ink-900 truncate">
                     {v.make} {v.model}
                   </span>
-                  <Link
+                  <Link prefetch={false}
                     href={`/vehicles/${v.id}`}
                     className="text-ink-300 hover:text-orange-600"
                   >
@@ -209,7 +209,7 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
             <ul className="divide-y divide-ink-100">
               {(invoices ?? []).map((inv) => (
                 <li key={inv.id}>
-                  <Link
+                  <Link prefetch={false}
                     href={`/invoices/${inv.id}`}
                     className="px-5 py-3 flex items-center gap-3 hover:bg-ink-50/40 transition-colors"
                   >

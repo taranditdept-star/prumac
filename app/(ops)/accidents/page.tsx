@@ -160,7 +160,7 @@ export default async function AccidentsPage() {
                   </td>
                   <td className="px-6 py-4">
                     {a.vehicles && (
-                      <Link href={`/accidents/${a.id}`} className="block">
+                      <Link prefetch={false} href={`/accidents/${a.id}`} className="block">
                         <PlateBadge
                           plate={a.vehicles.plate_number}
                           country={a.vehicles.plate_country}
@@ -183,7 +183,7 @@ export default async function AccidentsPage() {
                     <AccidentStatusBadge status={a.status} />
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link
+                    <Link prefetch={false}
                       href={`/accidents/${a.id}`}
                       className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                     >

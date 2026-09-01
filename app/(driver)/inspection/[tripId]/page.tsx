@@ -69,7 +69,7 @@ export default async function DriverInspectionPage({
   if (!templateId || !trip.vehicles) {
     return (
       <div className="p-4 pt-6">
-        <Link href={`/trip/${tripId}`} className="inline-flex items-center gap-1.5 text-sm text-ink-500">
+        <Link prefetch={false} href={`/trip/${tripId}`} className="inline-flex items-center gap-1.5 text-sm text-ink-500">
           <ArrowLeft className="h-4 w-4" /> Trip
         </Link>
         <p className="mt-6 text-sm text-rose-600">
@@ -97,7 +97,7 @@ export default async function DriverInspectionPage({
 
   return (
     <div className="p-4 pt-6 space-y-5">
-      <Link href={`/trip/${tripId}`} className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900">
+      <Link prefetch={false} href={`/trip/${tripId}`} className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900">
         <ArrowLeft className="h-4 w-4" /> Back to trip
       </Link>
 

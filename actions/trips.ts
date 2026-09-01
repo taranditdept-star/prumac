@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
+import { isDrivingSelf } from "@/lib/auth/driver";
 import { getOdometerJumpThreshold } from "@/lib/settings";
 import {
   tripStartSchema,
@@ -42,12 +43,21 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  // Odometer photo is mandatory for drivers — it is the tamper-proof evidence
-  // that the entered start reading is genuine. Managers/admins dispatching from
-  // the office aren't at the vehicle, so it's optional for them.
+  // Is this person about to drive, or dispatching someone else from the office?
+  //
+  // That is what the odometer photo, the vehicle-use terms and the daily
+  // checklist actually depend on — not the caller's role. Keying them off
+  // role === "driver" was wrong in both directions: an administrator who also
+  // drives skipped every control, and an admin dispatching a trip to their own
+  // driver record skipped them too.
+  const drivingSelf = await isDrivingSelf(profile.id, parsed.data.driver_id);
+
+  // Odometer photo is mandatory for the person at the wheel — it is the
+  // tamper-proof evidence that the entered start reading is genuine. Office
+  // dispatch isn't at the vehicle, so it stays optional there.
   const photoEntry = formData.get("start_odometer_photo");
   const photo = photoEntry instanceof File && photoEntry.size > 0 ? photoEntry : null;
-  if (!photo && profile.role === "driver") {
+  if (!photo && drivingSelf) {
     return { error: "A photo of the odometer is required to start a trip." };
   }
 
@@ -67,14 +77,14 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
 
   const termsAccepted =
     formData.get("terms_accepted") === "true" || formData.get("terms_accepted") === "on";
-  if (profile.role === "driver" && agreement && !termsAccepted) {
+  if (drivingSelf && agreement && !termsAccepted) {
     return { error: "You must accept the vehicle-use terms before starting a trip." };
   }
 
-  // A vehicle checklist is required once per day before driving (drivers only;
-  // office dispatch by managers/admins is exempt). One daily_checklist for this
+  // A vehicle checklist is required once per day before driving (the person
+  // driving only; office dispatch is exempt). One daily_checklist for this
   // vehicle completed today covers all of that day's trips.
-  if (profile.role === "driver") {
+  if (drivingSelf) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const { data: todaysChecklist } = await supabase
@@ -103,11 +113,11 @@ export async function startTrip(formData: FormData): Promise<ActionResult<{ id: 
     .single<{ current_odometer_km: number; default_subsidiary_id: string | null }>();
   const lastKnown = vehicle?.current_odometer_km ?? null;
 
-  // A driver must not be able to bill a trip to an arbitrary subsidiary: for
-  // drivers, derive it from the vehicle's owner. Managers/admins (office
-  // dispatch) keep the value they chose.
+  // The person driving must not be able to bill a trip to an arbitrary
+  // subsidiary: derive it from the vehicle's owner. Office dispatch keeps the
+  // value it chose.
   const effectiveSubsidiaryId =
-    profile.role === "driver"
+    drivingSelf
       ? vehicle?.default_subsidiary_id ?? parsed.data.subsidiary_id
       : parsed.data.subsidiary_id;
 

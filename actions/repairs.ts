@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireAuth, requireRole } from "@/lib/auth/session";
+import { getMyDriver } from "@/lib/auth/driver";
 import {
   repairClaimCreateSchema,
   repairClaimApproveSchema,
@@ -74,7 +75,11 @@ export async function submitRepairClaim(
   revalidatePath("/repair");
   revalidatePath("/home");
 
-  if (profile.role === "driver") return { redirectTo: "/home" };
+  // These forms live only in the driver app, so anyone with a driver record
+  // got here from it and belongs back on their own home screen — including
+  // a manager or administrator who drives. Office-only staff keep the
+  // detail-page destination.
+  if (await getMyDriver(profile.id)) return { redirectTo: "/home" };
   return { success: true, data: { id: data.id } };
 }
 

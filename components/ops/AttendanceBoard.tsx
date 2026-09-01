@@ -225,7 +225,7 @@ export function AttendanceBoard({
                       <Detail label="Note" value={p.note ?? "—"} />
                     </dl>
                     {p.driverId && (
-                      <Link
+                      <Link prefetch={false}
                         href={`/drivers/${p.driverId}`}
                         className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 hover:text-orange-700"
                       >

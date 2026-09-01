@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
+import { getMyDriver } from "@/lib/auth/driver";
 import { onboardingSchema } from "@/lib/validation/onboarding";
 
 export type ActionResult = { error: string } | { redirectTo: string };
@@ -15,7 +16,12 @@ export type ActionResult = { error: string } | { redirectTo: string };
  * DEFINER RPC since drivers can't UPDATE app.drivers directly.
  */
 export async function completeOnboarding(formData: FormData): Promise<ActionResult> {
-  await requireRole("driver");
+  const profile = await requireAuth();
+  // Gated on having a driver record rather than on role: a manager or
+  // administrator who drives keeps their own licence current too.
+  if (!(await getMyDriver(profile.id))) {
+    return { error: "You do not have a driver record to update." };
+  }
 
   const parsed = onboardingSchema.safeParse({
     phone: formData.get("phone"),

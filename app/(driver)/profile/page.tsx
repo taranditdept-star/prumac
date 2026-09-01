@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, UserPen } from "lucide-react";
-import { requireRole } from "@/lib/auth/session";
+import { requireDriverAccess } from "@/lib/auth/driver";
 import { createClient } from "@/lib/supabase/server";
 import { MyProfileForm, type MyProfile } from "@/components/driver/MyProfileForm";
 
@@ -21,7 +21,10 @@ interface DriverSelf {
 }
 
 export default async function DriverProfilePage() {
-  const profile = await requireRole("driver");
+  // Anyone who drives may edit their own licence and next of kin — including
+  // an administrator who also drives. The write itself is keyed on auth.uid()
+  // inside a SECURITY DEFINER function, so it can only touch their own row.
+  const { profile } = await requireDriverAccess();
   const supabase = await createClient();
 
   // Readable thanks to the drivers_read_self policy added in 0070.

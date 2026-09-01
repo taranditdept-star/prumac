@@ -141,7 +141,7 @@ export default async function HandoversPage() {
                   <td className="px-6 py-4"><StatusPill status={r.status} /></td>
                   <td className="px-6 py-4">
                     {r.vehicles && (
-                      <Link href={`/handovers/${r.id}`} className="block">
+                      <Link prefetch={false} href={`/handovers/${r.id}`} className="block">
                         <PlateBadge plate={r.vehicles.plate_number} country={r.vehicles.plate_country} size="sm" />
                         <p className="text-xs text-ink-500 mt-1 truncate max-w-[160px]">{r.vehicles.make} {r.vehicles.model}</p>
                       </Link>
@@ -154,7 +154,7 @@ export default async function HandoversPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{fmt(r.created_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/handovers/${r.id}`} className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all">
+                    <Link prefetch={false} href={`/handovers/${r.id}`} className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all">
                       <ArrowUpRight className="h-4 w-4" />
                     </Link>
                   </td>

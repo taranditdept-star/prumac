@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { requireDriverAccess } from "@/lib/auth/driver";
+import { roleDefaultPath } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import type { AppRole } from "@/types/domain";
 import { DriverBottomTabs } from "@/components/driver/BottomTabs";
 import { DriverHeader } from "@/components/driver/DriverHeader";
 import { LiveLocationProvider } from "@/components/driver/LiveLocationProvider";
@@ -43,15 +45,11 @@ function greetingFor(): string {
 }
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
-  const profile = await requireRole("driver");
+  // Gated on HAVING a driver record, not on role. Managers and administrators
+  // drive too, and gating on role silently bounced them to /live from every
+  // driver screen — so the trip they had just made could never be logged.
+  const { profile, driver } = await requireDriverAccess();
   const supabase = await createClient();
-
-  const { data: driver } = await supabase
-    .schema("app")
-    .from("drivers")
-    .select("id, licence_number, licence_country")
-    .eq("profile_id", profile.id)
-    .maybeSingle<{ id: string; licence_number: string; licence_country: string }>();
 
   // First-login gate: import-created drivers (licence_number = 'IMPORT-PENDING')
   // must complete their profile before using the app. Read fresh from `drivers`
@@ -89,6 +87,9 @@ export default async function DriverLayout({ children }: { children: React.React
           initial={initialOf(profile.full_name)}
           gradient={gradientFor(profile.full_name)}
           greeting={greetingFor()}
+          // Someone who is both an administrator and a driver needs a way back
+          // to the office side; without it the driver app is a one-way door.
+          officePath={profile.role === "driver" ? null : roleDefaultPath(profile.role as AppRole)}
         />
       <OfflineBar />
         <LocationPermissionBanner />

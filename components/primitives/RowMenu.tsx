@@ -179,7 +179,7 @@ export function RowMenu({
                   <div key={a.key}>
                     {a.separatorBefore && <div className="my-1 border-t border-ink-100" />}
                     {a.href && !a.disabled ? (
-                      <Link href={a.href} role="menuitem" className={cls} onClick={() => setOpen(false)}>
+                      <Link href={a.href} prefetch={false} role="menuitem" className={cls} onClick={() => setOpen(false)}>
                         {body}
                       </Link>
                     ) : (

@@ -165,7 +165,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 )}
               </div>
               {job.trip_id && (
-                <Link href={`/trips/${job.trip_id}`}
+                <Link prefetch={false} href={`/trips/${job.trip_id}`}
                       className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-600">
                   Open the trip <ArrowRight className="h-3.5 w-3.5" />
                 </Link>

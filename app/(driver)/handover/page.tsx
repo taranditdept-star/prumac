@@ -87,7 +87,7 @@ function HandoverCard({ r }: { r: HandoverRow }) {
   const s = STATUS[r.status];
   const Dir = r.direction === "incoming" ? ArrowDownLeft : ArrowUpRight;
   return (
-    <Link
+    <Link prefetch={false}
       href={`/handover/${r.id}`}
       className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-ink-200/70 hover:border-orange-200 active:scale-[0.99] transition-all"
     >

@@ -400,7 +400,7 @@ export default async function LiveOpsPage() {
         ) : (
           <div className="divide-y divide-ink-100 border-t border-ink-100">
             {(openFaults ?? []).map((f) => (
-              <Link
+              <Link prefetch={false}
                 key={f.id}
                 href={`/faults/${f.id}`}
                 className="flex items-start gap-3 px-4 py-3 sm:items-center sm:px-6 hover:bg-ink-50/50 transition-colors group"
@@ -505,7 +505,7 @@ export default async function LiveOpsPage() {
           ) : (
             <div className="divide-y divide-ink-100">
               {attentionVehicles.map(({ v, earliest }) => (
-                <Link
+                <Link prefetch={false}
                   key={v.id}
                   href={`/vehicles/${v.id}`}
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-6 sm:flex-nowrap hover:bg-ink-50/50 transition-colors group"

@@ -149,7 +149,7 @@ export default async function DriverTripPage({ params }: { params: Promise<{ id:
       {(() => {
         const isPost = trip.status === "ended" || trip.status === "completed";
         return (
-          <Link
+          <Link prefetch={false}
             href={`/inspection/${trip.id}?type=${isPost ? "post_trip" : "pre_trip"}`}
             className="block rounded-2xl bg-white border border-ink-200/70 p-4 hover:border-orange-300 hover:bg-orange-50/30 transition-all"
           >

@@ -249,7 +249,7 @@ export default async function DriverHomePage() {
                   ? t.end_odometer_km - t.start_odometer_km
                   : null;
               return (
-                <Link
+                <Link prefetch={false}
                   key={t.id}
                   href={`/trip/${t.id}`}
                   className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-ink-200/70 hover:border-orange-200 active:scale-[0.99] transition-all"
@@ -287,7 +287,7 @@ export default async function DriverHomePage() {
 
 function ActiveTripHero({ trip }: { trip: ActiveTrip }) {
   return (
-    <Link href={`/trip/${trip.id}`} className="block active:scale-[0.99] transition-transform">
+    <Link prefetch={false} href={`/trip/${trip.id}`} className="block active:scale-[0.99] transition-transform">
       <div className="relative rounded-[28px] bg-gradient-to-br from-ink-950 via-ink-900 to-ink-800 p-6 overflow-hidden">
         {/* Decorative blobs */}
         <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-orange-500/30 blur-3xl pointer-events-none" />

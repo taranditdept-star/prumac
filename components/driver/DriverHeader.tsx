@@ -4,10 +4,11 @@ import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, LogOut, Phone, IdCard, X, ShieldCheck, UserPen, ChevronRight } from "lucide-react";
+import { LogOut, Phone, IdCard, X, ShieldCheck, UserPen, ChevronRight, Building2 } from "lucide-react";
 import { signOut } from "@/actions/auth";
 import { flush, clearOutbox } from "@/lib/offline/outbox";
 import { Logo } from "@/components/brand/Logo";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface DriverHeaderProps {
   fullName: string | null;
@@ -18,6 +19,11 @@ interface DriverHeaderProps {
   gradient: string;
   greeting: string;
   alertCount?: number;
+  /**
+   * Where the office side of the app lives, for someone who is both an
+   * administrator and a driver. Null for an ordinary driver, who has none.
+   */
+  officePath?: string | null;
 }
 
 export function DriverHeader({
@@ -29,6 +35,7 @@ export function DriverHeader({
   gradient,
   greeting,
   alertCount = 0,
+  officePath = null,
 }: DriverHeaderProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -87,17 +94,7 @@ export function DriverHeader({
 
           {/* Right-side actions */}
           <div className="flex items-center gap-2">
-            {/* Bell */}
-            <button
-              type="button"
-              aria-label="Notifications"
-              className="relative h-11 w-11 rounded-2xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-700 active:scale-95 transition-all"
-            >
-              <Bell className="h-5 w-5" />
-              {alertCount > 0 && (
-                <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
-              )}
-            </button>
+            <NotificationBell audience="driver" initialCount={alertCount} tone="driver" />
 
             {/* Sign out */}
             <button
@@ -197,6 +194,26 @@ export function DriverHeader({
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
                 </Link>
+
+                {/* Someone who runs the office AND drives needs a door back.
+                    Without this the driver app is one-way: their role sends
+                    them to /live at login, and nothing here returns them. */}
+                {officePath && (
+                  <Link
+                    href={officePath}
+                    onClick={() => setMenuOpen(false)}
+                    className="mt-2 flex h-14 w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-4 text-left active:scale-[0.99] transition-transform"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                      <Building2 className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-ink-900">Switch to the office app</span>
+                      <span className="block text-xs text-ink-500">Fleet, drivers, invoices and reports</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                  </Link>
+                )}
 
                 {/* Sign out */}
                 <button

@@ -152,7 +152,7 @@ export default async function FaultsPage() {
                   </td>
                   <td className="px-6 py-4">
                     {f.vehicles && (
-                      <Link href={`/faults/${f.id}`} className="block">
+                      <Link prefetch={false} href={`/faults/${f.id}`} className="block">
                         <PlateBadge
                           plate={f.vehicles.plate_number}
                           country={f.vehicles.plate_country}
@@ -176,7 +176,7 @@ export default async function FaultsPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{timeAgo(f.reported_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link
+                    <Link prefetch={false}
                       href={`/faults/${f.id}`}
                       className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                     >

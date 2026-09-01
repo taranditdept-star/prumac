@@ -151,7 +151,7 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4">
                     {i.vehicles && (
-                      <Link href={`/inspections/${i.id}`} className="block">
+                      <Link prefetch={false} href={`/inspections/${i.id}`} className="block">
                         <PlateBadge
                           plate={i.vehicles.plate_number}
                           country={i.vehicles.plate_country}
@@ -171,7 +171,7 @@ export default async function InspectionsPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-ink-500">{fmt(i.completed_at)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link
+                    <Link prefetch={false}
                       href={`/inspections/${i.id}`}
                       className="inline-flex h-8 w-8 rounded-lg items-center justify-center text-ink-300 group-hover:text-orange-600 group-hover:bg-orange-50 transition-all"
                     >

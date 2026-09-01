@@ -143,7 +143,7 @@ export default async function DriverHistoryPage() {
                       ? `${t.origin_label} → ${t.destination_label}`
                       : "Trip");
                   return (
-                    <Link
+                    <Link prefetch={false}
                       key={t.id}
                       href={`/trip/${t.id}`}
                       className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-ink-200/70 active:scale-[0.99] transition-all"

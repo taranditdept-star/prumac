@@ -164,7 +164,7 @@ export default async function CostReportsPage() {
                   return (
                     <tr key={v.vehicle_id} className="hover:bg-ink-50/40 transition-colors">
                       <td className="px-5 py-3">
-                        <Link href={`/vehicles/${v.vehicle_id}`} className="inline-flex items-center gap-2 group">
+                        <Link prefetch={false} href={`/vehicles/${v.vehicle_id}`} className="inline-flex items-center gap-2 group">
                           <PlateBadge plate={v.plate_number} country={v.plate_country} size="sm" />
                           <span className="text-ink-700 group-hover:text-orange-600 transition-colors">{v.make} {v.model}</span>
                         </Link>

@@ -45,7 +45,7 @@ export default async function SubsidiariesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {list.map((s) => (
-          <Link
+          <Link prefetch={false}
             key={s.subsidiary_id}
             href={`/subsidiaries/${s.subsidiary_id}`}
             className="group relative rounded-2xl bg-white border border-ink-200/70 p-5 hover:border-orange-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"

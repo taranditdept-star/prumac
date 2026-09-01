@@ -1,14 +1,23 @@
 "use client";
 
 import { useTransition } from "react";
-import { Bell, LogOut, HelpCircle, Plus, Menu } from "lucide-react";
+import { LogOut, Plus, Menu, Truck } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "@/actions/auth";
 import { GlobalSearch } from "@/components/ops/GlobalSearch";
 import { useMobileNav } from "@/components/ops/mobile-nav";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import type { ProfileRow } from "@/types/domain";
 
-export function OpsTopBar({ profile, alertCount = 0 }: { profile: ProfileRow; alertCount?: number }) {
+export function OpsTopBar({
+  profile,
+  alertCount = 0,
+  canDrive = false,
+}: {
+  profile: ProfileRow;
+  alertCount?: number;
+  canDrive?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const { setOpen } = useMobileNav();
 
@@ -43,26 +52,23 @@ export function OpsTopBar({ profile, alertCount = 0 }: { profile: ProfileRow; al
           New
         </Link>
 
-        <button
-          type="button"
-          aria-label="Help"
-          className="h-10 w-10 rounded-xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-500 hover:text-ink-900 transition-colors"
-        >
-          <HelpCircle className="h-[18px] w-[18px]" />
-        </button>
+        {/* Someone who drives as well as running the office needs a door into
+            the driver app; their role sends them here at login and nothing
+            else leads back. Only rendered when they actually have a driver
+            record, so it never appears for office-only staff. */}
+        {canDrive && (
+          <Link
+            href="/home"
+            prefetch={false}
+            aria-label="Switch to the driver app"
+            title="Driver app"
+            className="h-10 w-10 rounded-xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-500 hover:text-ink-900 transition-colors"
+          >
+            <Truck className="h-[18px] w-[18px]" />
+          </Link>
+        )}
 
-        <Link
-          href="/live"
-          aria-label={`Notifications${alertCount ? ` (${alertCount} unresolved)` : ""}`}
-          className="relative h-10 w-10 rounded-xl bg-ink-50 hover:bg-ink-100 flex items-center justify-center text-ink-500 hover:text-ink-900 transition-colors"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {alertCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-              {alertCount > 99 ? "99+" : alertCount}
-            </span>
-          )}
-        </Link>
+        <NotificationBell audience="office" initialCount={alertCount} />
 
         <div className="h-6 w-px bg-ink-200 mx-1" />
 

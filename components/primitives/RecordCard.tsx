@@ -68,7 +68,11 @@ export function RecordCard({ href, lead, title, subtitle, badges, meta, action }
   return (
     <li className="relative">
       {href ? (
-        <Link href={href} className="block px-4 py-4 active:bg-ink-50/60">
+        // Never prefetched. This card is the mobile row for a dozen list screens,
+        // so a 50-row list would otherwise fire 50 server renders of detail pages
+        // nobody has asked for — the single biggest cause of a click on the
+        // admin side taking seconds to respond.
+        <Link href={href} prefetch={false} className="block px-4 py-4 active:bg-ink-50/60">
           {body}
         </Link>
       ) : (
