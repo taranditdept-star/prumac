@@ -31,7 +31,7 @@ export default async function DriverStartTripPage() {
   }
 
   // Fetch assigned vehicles + POOL vehicles (anyone can drive) + subsidiaries + terms
-  const [{ data: assignments }, { data: poolVehicles }, { data: subs }, { data: agreement }] = await Promise.all([
+  const [{ data: assignments }, { data: poolVehicles }, { data: subs }, { data: agreement }, { data: onTrip }] = await Promise.all([
     supabase
       .schema("app")
       .from("vehicle_assignments")
@@ -57,7 +57,19 @@ export default async function DriverStartTripPage() {
       .eq("kind", "trip_terms")
       .eq("is_active", true)
       .maybeSingle<{ id: string; title: string; body_md: string }>(),
+    // Which vehicles are already out. A driver cannot read other drivers'
+    // trips under RLS, so this goes through a SECURITY DEFINER function that
+    // returns only vehicle, driver name and start time.
+    supabase.schema("app").rpc("fn_vehicles_on_trip"),
   ]);
+
+  // A pool vehicle is for anyone — but only one person at a time. Marking the
+  // busy ones here means the driver sees that before filling in the form,
+  // instead of being refused by the database after it.
+  const busy: Record<string, string> = {};
+  for (const row of (onTrip as { vehicle_id: string; driver_name: string }[] | null) ?? []) {
+    busy[row.vehicle_id] = row.driver_name;
+  }
 
   const subsidiaryOptions = (Array.isArray(subs) ? subs : []) as { id: string; name: string }[];
 
@@ -97,7 +109,10 @@ export default async function DriverStartTripPage() {
       {vehicles.length === 0 ? (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
           <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-700">No vehicle assigned. Speak to your fleet manager.</p>
+          <p className="text-sm text-amber-700">
+            No vehicle is assigned to you, and there is no pool vehicle free to take. Ask
+            the office to assign you one, or to mark a shared vehicle as a pool vehicle.
+          </p>
         </div>
       ) : (
         <StartTripPicker
@@ -105,6 +120,7 @@ export default async function DriverStartTripPage() {
           driverId={driver.id}
           subsidiaries={subsidiaryOptions}
           agreement={agreement ?? null}
+          busy={busy}
         />
       )}
     </div>

@@ -109,7 +109,7 @@ export default async function NewHandoverPage({
       ? supabase.schema("app").from("inspection_templates").select("id, name").eq("id", templateId).single<{ id: string; name: string }>()
       : Promise.resolve({ data: null }),
     templateId
-      ? supabase.schema("app").from("inspection_checklist_items").select("id, sort_order, category, label, is_critical").eq("template_id", templateId).order("sort_order").returns<ChecklistItem[]>()
+      ? supabase.schema("app").from("inspection_checklist_items").select("id, sort_order, category, label, is_critical").eq("template_id", templateId).eq("is_active", true).order("sort_order").returns<ChecklistItem[]>()
       : Promise.resolve({ data: [] as ChecklistItem[] }),
     supabase.schema("app").rpc("fn_driver_options"),
   ]);

@@ -91,6 +91,7 @@ export default async function DriverInspectionPage({
       .from("inspection_checklist_items")
       .select("id, sort_order, category, label, is_critical, requires_photo")
       .eq("template_id", templateId)
+      .eq("is_active", true)
       .order("sort_order")
       .returns<ChecklistItem[]>(),
   ]);

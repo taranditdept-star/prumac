@@ -169,6 +169,9 @@ export default async function DriverChecklistPage({
       .from("inspection_checklist_items")
       .select("id, sort_order, category, label, is_critical, requires_photo")
       .eq("template_id", templateId)
+      // Retired items stay in the table so past inspections keep their
+      // questions; only live ones are asked again.
+      .eq("is_active", true)
       .order("sort_order")
       .returns<ChecklistItem[]>(),
     // Faults still open on this vehicle → the checklist pre-flags them as
