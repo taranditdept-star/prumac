@@ -45,7 +45,9 @@ export default async function DriverStartTripPage() {
       .from("vehicles")
       .select("id, plate_number, plate_country, make, model, current_odometer_km, default_subsidiary_id")
       .eq("is_pool", true)
-      .neq("status", "decommissioned")
+      // A vehicle in the workshop has no driver because it is being repaired,
+      // not because it is shared. It must not be offered to anyone.
+      .not("status", "in", "(workshop,decommissioned)")
       .order("plate_number")
       .returns<AssignedVehicle[]>(),
     // Drivers can't read app.subsidiaries directly (RLS); use the safe RPC.

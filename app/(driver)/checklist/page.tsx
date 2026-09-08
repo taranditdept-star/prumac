@@ -74,7 +74,7 @@ export default async function DriverChecklistPage({
       .from("vehicles")
       .select("id, plate_number, plate_country, make, model, current_odometer_km")
       .eq("is_pool", true)
-      .neq("status", "decommissioned")
+      .not("status", "in", "(workshop,decommissioned)")
       .order("plate_number")
       .returns<AssignedVehicle[]>(),
   ]);
