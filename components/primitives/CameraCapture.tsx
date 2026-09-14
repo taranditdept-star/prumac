@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Camera, X, SwitchCamera, Loader2 } from "lucide-react";
 
 interface CameraCaptureProps {
@@ -25,8 +26,11 @@ export function CameraCapture({ onCapture, onClose, onUnavailable }: CameraCaptu
   const streamRef = useRef<MediaStream | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [ready, setReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [count, setCount] = useState(0);
   const [flash, setFlash] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -98,7 +102,13 @@ export function CameraCapture({ onCapture, onClose, onUnavailable }: CameraCaptu
     onClose();
   }
 
-  return (
+  if (!mounted) return null;
+
+  // Rendered into <body>: `position: fixed` resolves against the nearest
+  // ancestor with a transform, filter or backdrop-filter, so a camera opened
+  // from inside a card could otherwise be clipped to that card instead of
+  // filling the screen.
+  return createPortal(
     <div className="fixed inset-0 z-[110] flex flex-col bg-black">
       {flash && <div className="pointer-events-none absolute inset-0 z-20 bg-white" />}
 
@@ -148,6 +158,7 @@ export function CameraCapture({ onCapture, onClose, onUnavailable }: CameraCaptu
           Done
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
